@@ -68,6 +68,7 @@ or by reading the data from Neo4j / `config.py` paths. Claim a row before starti
 | S10 is not reproducible run to run: its random draws are seeded, but the MEP pool (and some query results) come from Neo4j without ORDER BY, so `random_tablers_mean` and ties shift | `pipeline/s10_analyse.py`, `neo4j/queries/` | pre-existing | Todo |
 | DSA Track A codebook: Gemini draft (10 issues, articles checked) awaiting owner review; `regulatory_approach` points at weak articles (Art11, Art13) | `data_sources/procedures/dsa_issues.yaml` (protected) | owner approval | Todo |
 | Each build lists only its own law as processed (DSA demo shows the AI Act as "not processed yet"); `config._REQUIRED` lacks title/short/law/wording; `analysis.salient_articles` and `featured_article` empty for the DSA | `pipeline/s11b_demo.py`, `pipeline/config.py`, `dsa.yaml` | design / owner | Todo |
+| Add the CI workflow back: `.github/workflows/boundaries.yml` (tach check on PRs and pushes to main) is on branch `chore/agent-guardrails` but not on `main`; the push token lacked the `workflow` scope | `.github/workflows/` (protected) | needs the GitHub web editor or a token with the workflow scope | Todo |
 | `hys_feedback_*` entries in `sources.yaml` now only feed S00's manifest check (S00/S01 read the procedure paths); a missing feedback file is no longer registered in `sources._DEGRADED` | `data_sources/sources.yaml`, `pipeline/sources.py` | shared files | Todo |
 
 ## Graph contract changes
