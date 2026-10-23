@@ -53,9 +53,9 @@ or by reading the data from Neo4j / `config.py` paths. Claim a row before starti
 
 | Item | Where | Why deferred | Status |
 |---|---|---|---|
-| Parser fixes that change AI Act output: case-insensitive `_STRUCT` headings (8 AI Act / 4 DSA unit texts lose a stray chapter heading), `units.resolve()` article `(1)` variant (DSA exact 0.924 -> 0.952, flips 28 AI Act exact flags), dead `of Regulation (EU) 20...` branch in S01 `_OTHER_LAW` | `s02_legal_texts.py`, `units.py`, `s01_feedback.py` | would change AI Act results; needs owner decision and an AI Act re-run | Todo |
-| `dsa.yaml`: recitals are 156 (comment says 158); fill `texts.proposal.size` = 74 articles, 0 annexes, 106 recitals | `data_sources/procedures/dsa.yaml` | protected file, owner approval | Todo |
-| Add pypdf, pdfplumber, python-docx to a requirements file | `requirements.txt` (hotspot) | shared file, owner decision | Todo |
+| Parser fixes that change AI Act output: case-insensitive `_STRUCT` headings (8 AI Act / 4 DSA unit texts lose a stray chapter heading), `units.resolve()` article `(1)` variant (DSA exact 0.924 -> 0.952, flips 28 AI Act exact flags), dead `of Regulation (EU) 20...` branch in S01 `_OTHER_LAW` | `s02_legal_texts.py`, `units.py`, `s01_feedback.py` | would change AI Act results; needs owner decision and an AI Act re-run | Done: heading fix and `_OTHER_LAW` fix adopted; `resolve()` article variant dropped (cosmetic gain, some wrong exact labels) |
+| `dsa.yaml`: recitals are 156 (comment says 158); fill `texts.proposal.size` = 74 articles, 0 annexes, 106 recitals | `data_sources/procedures/dsa.yaml` | protected file, owner approval | Done |
+| Add pypdf, pdfplumber, python-docx to a requirements file | `requirements.txt` (hotspot) | shared file, owner decision | Done (requirements.txt, plus certifi SSL context in the scraper) |
 | Scraper retries forever on network errors; `load_stages_config` duplicated in both scrapers; validate `feedback`/`texts`/`initiative` in `config._load_procedure` | `WebScraping/*.py`, `pipeline/config.py` | low risk | Todo |
 | S00 checks the AI Act EUR-Lex CSVs even for `--procedure dsa` | `pipeline/s00_check.py` | W3 owns S00 | Todo (W3) |
 | `hys_feedback_*` entries in `sources.yaml` now only feed S00's manifest check (S00/S01 read the procedure paths); a missing feedback file is no longer registered in `sources._DEGRADED` | `data_sources/sources.yaml`, `pipeline/sources.py` | shared files | Todo |
