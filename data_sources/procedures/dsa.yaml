@@ -34,11 +34,11 @@ texts:
 
 parliament:
   lead_committee: IMCO              # verified; not a joint committee
-  rapporteurs: [Christel SCHALDEMOSE]   # verified (dossier); TODO W3: match the spelling in the MEP records
+  rapporteurs: [Christel SCHALDEMOSE]   # verified (dossier; same spelling as ParlTrack MEP 37312)
   report:
     id: A9-0356/2021                # verified: 575 plenary records = ids -1..-565 (no -564) plus 11 "/rev" variants
-    date: null                      # TODO W3
-    n_amendments: null              # TODO W3: which numbers are report amendments vs plenary group amendments
+    date: "2022-01"                 # verified: plenary vote on the report amendments, 2022-01-12
+    n_amendments: 457               # verified: -1..-457 are IMCO (report) amendments, -458..-565 plenary group ones
   term: ["2019-07-02", "2024-07-15"]
   country_date: "2021-06-01"          # middle of the committee phase; TODO W3 confirm
 
@@ -68,6 +68,6 @@ stance:
 
 expect:
   committee_amendments: 5901        # verified (IMCO 2115, JURI 1062, LIBE 785, ITRE 643, ECON 526, CULT 366, ...)
-  report_amendments: null           # TODO W3
+  report_amendments: 457           # verified
 
 data_dir: data/dsa
