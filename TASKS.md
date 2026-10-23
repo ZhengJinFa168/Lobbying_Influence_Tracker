@@ -11,6 +11,7 @@ Status: `Todo` · `In progress` · `In review` · `Blocked` · `Done`
 |---|---|---|---|---|---|
 | _example: tighten org name matching_ | `pipeline/s06_orgs.py` | _name_ | `feat/org-matching` | Todo | _touches graph contract? y/n_ |
 | Agent guardrails: Tach boundaries, guard hook, CODEOWNERS, CI | `tach.toml`, `.pre-commit-config.yaml`, `.github/`, `.claude/`, `CLAUDE.md`, `TASKS.md`, `requirements-dev.txt` | Luigi Zheng | `chore/agent-guardrails` | In progress | graph contract: n; no pipeline code changed |
+| DSA step 0: per-procedure config format, AI Act literal audit, separate DSA Neo4j | `data_sources/procedures/`, `neo4j/docker-compose.dsa.yml`, docs only (no stage code yet) | Luigi Zheng | `feat/dsa-step0` | In progress | graph contract: n; config format needs owner approval before `config.py` changes |
 | | | | | | |
 
 ## Module owners
