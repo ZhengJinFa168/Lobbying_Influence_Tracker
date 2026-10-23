@@ -82,9 +82,12 @@ def check_parltrack() -> None:
         (ok if n_comm == exp_comm else warn)(f"committee amendments for {config.PROCEDURE}: {n_comm} (plan expects {exp_comm:,})")
     plen = [r for r in sources.iter_zst_json(sources.path("parltrack_plenary_amendments"), needle)
             if r.get("reference") == config.PROCEDURE]
-    rep_id = (config.PROC.get("parliament") or {}).get("report", {}).get("id", "")
+    report = (config.PROC.get("parliament") or {}).get("report") or {}
+    rep_id, rep_n = report.get("id", ""), report.get("n_amendments")
     rep_prefix = f"{rep_id}-"
-    n_rep = sum(1 for r in plen if str(r.get("id", "")).startswith(rep_prefix))
+    # same definition as S04: <report id>-<n> with n <= n_amendments (higher numbers and "/rev" ids are plenary ones)
+    rep_re = re.compile(rf"^{re.escape(rep_id)}-(\d+)$")
+    n_rep = sum(1 for r in plen if (m := rep_re.match(str(r.get("id", "")))) and (rep_n is None or int(m.group(1)) <= rep_n))
     exp_rep = exp.get("report_amendments")
     if exp_rep is None:
         info(f"plenary amendments for {config.PROCEDURE}: {len(plen)}, "
