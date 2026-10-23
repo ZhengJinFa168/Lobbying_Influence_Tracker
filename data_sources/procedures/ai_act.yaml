@@ -1,4 +1,4 @@
-# Format approved by the owner on "2026-10-23" (protected file: changes need approval). Not read by code until config.py is wired.
+# Format approved by the owner on 2026-10-23 (protected file: changes need approval). Read by pipeline/config.py.
 # Format for one legislative procedure. Every value here is what the code hard-codes today (see the comment on each
 # field for where), so once config.py reads this file an AI Act run must reproduce the current results exactly.
 id: ai_act                          # slug: data dir, Neo4j instance, demo URL, `--procedure ai_act`

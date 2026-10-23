@@ -1,4 +1,4 @@
-# Format approved by the owner on "2026-10-23" (protected file: changes need approval). Not read by code until config.py is wired.
+# Format approved by the owner on 2026-10-23 (protected file: changes need approval). Read by pipeline/config.py.
 # Same format as ai_act.yaml.
 # "verified" = checked against the ParlTrack dumps in amendments/ on "2026-10-23". TODO Wn = filled by that workstream.
 id: dsa
