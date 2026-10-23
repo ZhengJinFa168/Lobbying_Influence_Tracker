@@ -58,6 +58,7 @@ or by reading the data from Neo4j / `config.py` paths. Claim a row before starti
 | Add pypdf, pdfplumber, python-docx to a requirements file | `requirements.txt` (hotspot) | shared file, owner decision | Todo |
 | Scraper retries forever on network errors; `load_stages_config` duplicated in both scrapers; validate `feedback`/`texts`/`initiative` in `config._load_procedure` | `WebScraping/*.py`, `pipeline/config.py` | low risk | Todo |
 | S00 checks the AI Act EUR-Lex CSVs even for `--procedure dsa` | `pipeline/s00_check.py` | W3 owns S00 | Todo (W3) |
+| `hys_feedback_*` entries in `sources.yaml` now only feed S00's manifest check (S00/S01 read the procedure paths); a missing feedback file is no longer registered in `sources._DEGRADED` | `data_sources/sources.yaml`, `pipeline/sources.py` | shared files | Todo |
 
 ## Graph contract changes
 

@@ -42,7 +42,12 @@ def check_manifest() -> None:
 def check_feedback() -> None:
     print("\n[Have Your Say feedback]")
     for track, pub in config.PUB_IDS.items():
-        recs = sources.load(f"hys_feedback_{pub}")
+        rel = config.PROC["consultation"][track]["feedback"]  # same file sources.yaml names for ai_act
+        path = config.ROOT / rel
+        if not path.exists():
+            warn(f"{pub} (track {track}): {rel} not found")
+            continue
+        recs = json.loads(path.read_text(encoding="utf-8"))
         ids = [r["feedback_id"] for r in recs]
         empty = sum(1 for r in recs if not (r.get("full_text") or "").strip())
         types = Counter(r.get("user_type") for r in recs)
