@@ -66,7 +66,7 @@ wording:                            # exact strings inserted into the LLM prompt
   proposal_prompt: "the European Commission's 2021 AI Act proposal"                   # s09:203
 
 stance:                             # S09 Track A codebook (issues, choices, articles), to be moved out of s09:146-174
-  codebook: data_sources/procedures/ai_act_issues.yaml   # to be created from s09:146-174 (W4); does not exist yet
+  codebook: data_sources/procedures/ai_act_issues.yaml   # extracted verbatim from s09:146-174
 
 expect:                             # S00 sanity counts; a mismatch warns, it does not fail
   committee_amendments: 4852        # s00:66
