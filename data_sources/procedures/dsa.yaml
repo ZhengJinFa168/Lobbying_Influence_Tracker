@@ -8,27 +8,27 @@ short: DSA
 law: Regulation (EU) 2022/2065      # verified (ParlTrack dossier)
 
 consultation:
-  initiative: null                  # TODO W1
+  initiative: 12417-Digital-Services-Act-deepening-the-Internal-Market-and-clarifying-responsibilities-for-digital-services   # verified (Have Your Say API)
   A:
-    publication: null               # TODO W1: 2020 inception impact assessment feedback, if it exists
+    publication: 13125              # verified: inception impact assessment, 110 feedback items
     label: 2020 inception impact assessment
-    feedback: null                  # TODO W1
+    feedback: WebScraping/feedback/stage1_inception_13125/parsed_feedback_stage1_13125.json   # written by the W1 scraper
   B:
-    publication: null               # TODO W1: feedback on COM(2020)825
+    publication: 13971              # verified: feedback on COM(2020)825, 138 feedback items
     label: 2021 feedback on the proposal
-    feedback: null                  # TODO W1
+    feedback: WebScraping/feedback/stage2_proposal_13971/parsed_feedback_stage2_13971.json   # written by the W1 scraper
 
 texts:
   proposal:
     ref: COM(2020)825               # verified (ParlTrack dossier)
-    date: null                      # TODO W2
-    celex: 52020PC0825              # TODO W2: confirm on CELLAR
-    files: [52020PC0825]            # TODO W2: annexes as a separate document?
+    date: "2020-12-15"              # verified ("Brussels, 15.12.2020")
+    celex: 52020PC0825              # verified on CELLAR
+    files: [52020PC0825]            # verified: no separate annex document
     size: null                      # TODO W2: derived from the parsed proposal
   final:
-    date: null                      # TODO W2
-    adopted: 32022R2065             # TODO W2: confirm on CELLAR
-    consolidated: null              # TODO W2: is there a consolidated version?
+    date: "2022-10-19"              # verified ("of 19 October 2022")
+    adopted: 32022R2065             # verified on CELLAR (158 recitals)
+    consolidated: null              # 02022R2065-20221027 (corrigendum) exists in CELLAR but is not served as XHTML; the OJ text suffices
     consolidated_date: null
     unit_prefix: "2022/2065"
 

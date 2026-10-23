@@ -13,6 +13,8 @@ Status: `Todo` · `In progress` · `In review` · `Blocked` · `Done`
 | Agent guardrails: Tach boundaries, guard hook, CODEOWNERS, CI | `tach.toml`, `.pre-commit-config.yaml`, `.github/`, `.claude/`, `CLAUDE.md`, `TASKS.md`, `requirements-dev.txt` | Luigi Zheng | `chore/agent-guardrails` | In progress | graph contract: n; no pipeline code changed |
 | DSA step 0: per-procedure config format, AI Act literal audit, separate DSA Neo4j | `data_sources/procedures/`, `neo4j/docker-compose.dsa.yml`, docs only (no stage code yet) | Luigi Zheng | `feat/dsa-step0` | Done | graph contract: n (`MET_WITH.ai_related` kept as "about this procedure" for the DSA dry run); format approved 2026-10-23 |
 | Wire per-procedure config: `config.py` loads `data_sources/procedures/<id>.yaml`, `run.py --procedure` | `pipeline/config.py`, `pipeline/run.py` (shared hotspots) | Luigi Zheng | `feat/dsa-step0` | Done | default `ai_act`, all existing config values unchanged; stages not touched. A stage opts in to other procedures with `PROCEDURE_AWARE = True` |
+| DSA W1: Have Your Say comments (pubs 13125, 13971) | `WebScraping/*.py`, `pipeline/s01_feedback.py` | Gemini 3.8 Flash High (coder), Claude (review, merge) | `feat/dsa-w1-hys` | In progress | inputs from `config.PROC`; AI Act output unchanged |
+| DSA W2: legal texts (52020PC0825, 32022R2065) | `pipeline/s02_legal_texts.py`, `pipeline/units.py`, `data_sources/eurlex/` | Gemini 3.8 Flash High (coder), Claude (review, merge) | `feat/dsa-w2-eurlex` | In progress | unit ids must match ParlTrack locations; AI Act CSVs unchanged |
 | | | | | | |
 
 ## Module owners

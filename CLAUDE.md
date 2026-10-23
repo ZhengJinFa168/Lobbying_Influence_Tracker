@@ -76,12 +76,26 @@ agy -p "<prompt>" --mode plan --model gemini-3.8-flash-medium --print-timeout 30
 - `-p` runs one prompt non-interactively. `agy` runs in the current directory and **can read repo files itself**: name the paths in the prompt.
 - **`agy -p` does not read stdin.** `git diff | agy -p "..."` sends nothing. Put content in the prompt argument instead:
   `agy -p "$(printf 'Review this diff:\n\n'; git diff)"`.
-- `--mode plan` keeps Gemini read-only. Never pass `--dangerously-skip-permissions`; headless `agy` cannot run shell commands without it, which is what we want.
+- `--mode plan` keeps Gemini read-only (the default for research and review; workstream coding is the exception below). Never pass `--dangerously-skip-permissions`; headless `agy` cannot run shell commands without it, which is what we want.
   Tell Gemini in the prompt to use only its file-reading tool, or it may try `grep`/`cat`, get denied, and return nothing.
 - **`agy` exits 0 even when it did nothing.** An output starting `jetski: no output produced` means a tool was denied; retry with a stricter prompt.
 - Models: `gemini-3.8-flash-medium` for search and summaries, `gemini-4-argon-high` for reviews and tricky reasoning (`agy models` lists all).
 - Always set `--print-timeout`; a hung call should fail, not block the session.
 - Ask for a structured answer (file:line references, bullet findings) so the result is easy to verify.
+
+### Gemini as coder for workstreams (owner-approved 2026-10-23)
+
+For the DSA workstreams (W1-W6) Gemini writes module internals; Claude briefs, tests, reviews and merges.
+
+- One git worktree and branch per workstream (`feat/dsa-wN-<name>` from `feat/dsa-step0`), outside the repo folder.
+  Run `agy -p "<brief>" --mode accept-edits --model gemini-3.8-flash-high --print-timeout 1800s` with the worktree as the
+  working directory. Never `--mode auto` or `--dangerously-skip-permissions`: Gemini edits files but runs no commands.
+- The guard hook does not see Gemini's edits. Before anything is merged, Claude checks the branch diff: it must touch only the
+  workstream's own files and no protected file. Anything else is reverted or brought to the user.
+- Claude runs all commands (scraping, downloads, stages, `tach check`, S00) and feeds failures back to Gemini.
+- Then `gemini-reviewer` (Argon) reviews the diff, Claude verifies, and merges one branch at a time into `feat/dsa-step0`.
+- A stage opts in to other procedures with a module-level `PROCEDURE_AWARE = True` once it reads everything from `config.PROC`;
+  `run.py` refuses other stages for any procedure but `ai_act`. The AI Act run must stay unchanged.
 
 ### What never goes to Gemini
 
