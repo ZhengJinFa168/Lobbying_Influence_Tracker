@@ -1,0 +1,73 @@
+# Format approved by the owner on 2026-10-23 (protected file: changes need approval). Read by pipeline/config.py.
+# Same format as ai_act.yaml.
+# "verified" = checked against the ParlTrack dumps in amendments/ on "2026-10-23". TODO Wn = filled by that workstream.
+id: dsa
+procedure: "2020/0361(COD)"         # verified
+title: Digital Services Act
+short: DSA
+law: Regulation (EU) 2022/2065      # verified (ParlTrack dossier)
+
+consultation:
+  initiative: 12417-Digital-Services-Act-deepening-the-Internal-Market-and-clarifying-responsibilities-for-digital-services   # verified (Have Your Say API)
+  A:
+    publication: 13125              # verified: inception impact assessment, 110 feedback items
+    label: 2020 inception impact assessment
+    feedback: WebScraping/feedback/stage1_inception_13125/parsed_feedback_stage1_13125.json   # written by the W1 scraper
+  B:
+    publication: 13971              # verified: feedback on COM(2020)825, 138 feedback items
+    label: 2021 feedback on the proposal
+    feedback: WebScraping/feedback/stage2_proposal_13971/parsed_feedback_stage2_13971.json   # written by the W1 scraper
+
+texts:
+  proposal:
+    ref: COM(2020)825               # verified (ParlTrack dossier)
+    date: "2020-12-15"              # verified ("Brussels, 15.12.2020")
+    celex: 52020PC0825              # verified on CELLAR
+    files: [52020PC0825]            # verified: no separate annex document
+    size: {articles: 74, annexes: 0, recitals: 106}   # from the parsed proposal (S02); S01 citation limits
+  final:
+    date: "2022-10-19"              # verified ("of 19 October 2022")
+    adopted: 32022R2065             # verified on CELLAR (156 recitals)
+    consolidated: null              # 02022R2065-20221027 (corrigendum) exists in CELLAR but is not served as XHTML; the OJ text suffices
+    consolidated_date: null
+    unit_prefix: "2022/2065"
+
+parliament:
+  lead_committee: IMCO              # verified; not a joint committee
+  rapporteurs: [Christel SCHALDEMOSE]   # verified (dossier; same spelling as ParlTrack MEP 37312)
+  report:
+    id: A9-0356/2021                # verified: 575 plenary records = ids -1..-565 (no -564) plus 11 "/rev" variants
+    date: "2022-01"                 # verified: plenary vote on the report amendments, 2022-01-12
+    n_amendments: 457               # verified: -1..-457 are IMCO (report) amendments, -458..-565 plenary group ones
+  term: ["2019-07-02", "2024-07-15"]
+  country_date: "2021-06-01"          # middle of the committee phase; TODO W3 confirm
+
+null_procedure: "2021/0106(COD)"    # AI Act: neighbouring digital file, different topic. DMA is too close (same package and lobbies)
+
+meetings:
+  include: ['digital services act', '\bDSA\b', 'online platforms?', 'content moderation', 'illegal content',
+            'intermediary liability', 'e-commerce directive', 'notice and action']   # TODO W4: review, add languages
+  exclude: ['digital markets act', '\bDMA\b']
+
+analysis:
+  salient_articles: []              # TODO W3: e.g. the liability exemptions and the very-large-platform chapter
+  featured_article: null            # TODO W6
+  shared_sources:                   # TODO W5/W6: list texts many comments quote
+    demo: "the e-Commerce Directive"
+    dashboard: "e-Commerce Directive"
+
+wording:                            # TODO W4: review all
+  topic: "online platforms and digital services"
+  judge_target_A: "a provision of the Commission's 2020 proposal"
+  judge_target_B: "a European Parliament committee amendment to the 2020 proposal"
+  stance_consultation: "the European Commission's 2020 consultation on a Digital Services Act (inception impact assessment)"
+  proposal_prompt: "the European Commission's 2020 Digital Services Act proposal"
+
+stance:
+  codebook: data_sources/procedures/dsa_issues.yaml   # TODO W4: draft with an LLM, owner approves
+
+expect:
+  committee_amendments: 5901        # verified (IMCO 2115, JURI 1062, LIBE 785, ITRE 643, ECON 526, CULT 366, ...)
+  report_amendments: 457           # verified
+
+data_dir: data/dsa

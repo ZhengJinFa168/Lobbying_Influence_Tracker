@@ -1,15 +1,22 @@
 """S02 EUR-Lex HTML -> legal units -> Provision text (proposal) and LegalUnit (final act).
 
-Inputs (data_sources/eurlex/raw/, downloaded through the CELLAR API):
-  52021PC0206.html + 52021PC0206_annexes.html   Commission proposal COM(2021)206 -> Provision
-  02024R1689-20260727.html                      consolidated final act (no recitals, includes M1) -> LegalUnit
-  32024R1689.html                               final act as adopted (recitals; "as adopted" text) -> LegalUnit
+Inputs (data_sources/eurlex/raw/, configured per procedure in data_sources/procedures/<id>.yaml):
+  Proposal: main document (recitals + body, stopping at legislative financial statement if present)
+            plus any annex files -> Provision.
+            E.g. AI Act: 52021PC0206.html + 52021PC0206_annexes.html (COM(2021)206)
+                 DSA:    52020PC0825.html (COM(2020)825)
+  Final act: recitals from the OJ text, articles/annexes either from the consolidated text (when
+             available, e.g. AI Act 02024R1689-20260727.html with 32024R1689.html) or directly
+             from the OJ publication (e.g. DSA 32022R2065.html) -> LegalUnit.
 
 Every level becomes a unit (article, paragraph, point, sub-point; annex, point...), with `text` = its own
 words and `full_text` = its own words plus all descendants. IDs follow pipeline/units.py, i.e. ParlTrack's
 location strings, so S03 can join amendments to provisions directly.
 
-Outputs: data_sources/eurlex/proposal_units.csv, final_units.csv (+ parquet copies in data/cache).
+Outputs:
+  - For default procedure (ai_act): data_sources/eurlex/{proposal_units,final_units}.csv
+  - For other procedures:          data_sources/eurlex/<id>/{proposal_units,final_units}.csv
+  - Parquet tables cached under config.CACHE (data/cache/ or data/<id>/cache/).
 """
 from __future__ import annotations
 
@@ -23,6 +30,8 @@ from bs4 import BeautifulSoup, NavigableString, XMLParsedAsHTMLWarning
 
 from . import config, graph
 from .units import parent
+
+PROCEDURE_AWARE = True  # opted in to multi-procedure runs via config.PROC
 
 warnings.filterwarnings("ignore", category=XMLParsedAsHTMLWarning)
 log = logging.getLogger("s02")
@@ -84,7 +93,8 @@ def merge_labels(lines: list[str]) -> list[str]:
 ROMAN_RE = re.compile(r"^(i|ii|iii|iv|v|vi|vii|viii|ix|x|xi|xii|xiii|xiv|xv)$")
 _ART = re.compile(r"^Article (\d+)$")
 _ANNEX = re.compile(r"^ANNEX ([IVXL]+)\b")
-_STRUCT = re.compile(r"^(TITLE|CHAPTER|SECTION|Section|PART|Part) [IVXLC0-9A-Z]+\b")
+# keyword in any case ("Chapter II", "SECTION 1"), number as Roman numeral, digits or one capital: "Part of" is not a heading
+_STRUCT = re.compile(r"^(?i:TITLE|CHAPTER|SECTION|SUBSECTION|PART)\s+(?:[IVXLC]+[A-Z]?|\d+[A-Za-z]?|[A-Z])\b")
 _REC = re.compile(r"^\((\d{1,3})\)\s*(.+)$")
 
 
@@ -318,47 +328,71 @@ def to_frame(units: dict[str, Unit], celex: str) -> pd.DataFrame:
 
 # ---------------------------------------------------------------- build
 def build() -> dict[str, pd.DataFrame]:
+    texts = config.PROC["texts"]
+
     # Commission proposal: recitals + articles (the legislative financial statement follows the articles)
-    pl = merge_labels(html_lines(RAW / "52021PC0206.html"))
-    rec = parse_recitals(pl)
-    arts = parse_body(after(pl, "HAVE ADOPTED"), "52021PC0206", stop=("LEGISLATIVE FINANCIAL STATEMENT",))
-    anx = parse_body(merge_labels(html_lines(RAW / "52021PC0206_annexes.html")), "52021PC0206")
-    proposal = pd.concat([to_frame(rec, "52021PC0206"), to_frame(arts, "52021PC0206"),
-                          to_frame(anx, "52021PC0206")], ignore_index=True)
+    p_cfg = texts["proposal"]
+    p_celex = str(p_cfg["celex"])
+    p_files = [str(f) for f in p_cfg["files"]]
+
+    main_lines = merge_labels(html_lines(RAW / f"{p_files[0]}.html"))
+    rec = parse_recitals(main_lines)
+    arts = parse_body(after(main_lines, "HAVE ADOPTED"), p_celex, stop=("LEGISLATIVE FINANCIAL STATEMENT",))
+    prop_frames = [to_frame(rec, p_celex), to_frame(arts, p_celex)]
+    for anx_file in p_files[1:]:
+        anx = parse_body(merge_labels(html_lines(RAW / f"{anx_file}.html")), p_celex)
+        prop_frames.append(to_frame(anx, p_celex))
+    proposal = pd.concat(prop_frames, ignore_index=True)
 
     # Final act: recitals from the OJ version, articles/annexes from the consolidated text (as in force),
     # plus the OJ articles/annexes as the "as adopted" text for each unit.
-    ol = merge_labels(html_lines(RAW / "32024R1689.html"))
-    f_rec = to_frame(parse_recitals(ol), "32024R1689")
-    f_oj = to_frame(parse_body(after(ol, "HAVE ADOPTED"), "32024R1689"), "32024R1689")
-    cl = merge_labels(html_lines(RAW / "02024R1689-20260727.html"))
-    f_cons = to_frame(parse_body(cl, "02024R1689-20260727"), "02024R1689-20260727")
-    adopted = f_oj.set_index("unit_id")["text"].to_dict()
-    f_cons["text_as_adopted"] = f_cons["unit_id"].map(adopted)
-    f_cons["consolidated_version"] = "2026-07-27"
-    f_rec["text_as_adopted"] = f_rec["text"]
-    final = pd.concat([f_rec, f_cons], ignore_index=True)
-    # units only in the OJ version (removed or renumbered by M1) are kept too, flagged
-    only_oj = f_oj[~f_oj.unit_id.isin(f_cons.unit_id)].assign(text_as_adopted=lambda d: d.text, not_in_force=True)
-    final = pd.concat([final, only_oj], ignore_index=True)
-    final["law_unit_id"] = "2024/1689:" + final["unit_id"]
+    f_cfg = texts["final"]
+    adopted_celex = str(f_cfg["adopted"])
+    ol = merge_labels(html_lines(RAW / f"{adopted_celex}.html"))
+    f_rec = to_frame(parse_recitals(ol), adopted_celex)
+    f_oj = to_frame(parse_body(after(ol, "HAVE ADOPTED"), adopted_celex), adopted_celex)
+
+    if f_cfg.get("consolidated"):
+        cons_celex = str(f_cfg["consolidated"])
+        cl = merge_labels(html_lines(RAW / f"{cons_celex}.html"))
+        f_cons = to_frame(parse_body(cl, cons_celex), cons_celex)
+        adopted = f_oj.set_index("unit_id")["text"].to_dict()
+        f_cons["text_as_adopted"] = f_cons["unit_id"].map(adopted)
+        f_cons["consolidated_version"] = None if f_cfg.get("consolidated_date") is None else str(f_cfg["consolidated_date"])
+        f_rec["text_as_adopted"] = f_rec["text"]
+        final = pd.concat([f_rec, f_cons], ignore_index=True)
+        # units only in the OJ version (removed or renumbered by M1) are kept too, flagged
+        only_oj = f_oj[~f_oj.unit_id.isin(f_cons.unit_id)].assign(text_as_adopted=lambda d: d.text, not_in_force=True)
+        final = pd.concat([final, only_oj], ignore_index=True)
+    else:
+        f_rec["text_as_adopted"] = f_rec["text"]
+        f_oj["text_as_adopted"] = f_oj["text"]
+        final = pd.concat([f_rec, f_oj], ignore_index=True)
+        final["consolidated_version"] = None
+        final["not_in_force"] = None
+
+    prefix = f_cfg["unit_prefix"]
+    final["law_unit_id"] = f"{prefix}:" + final["unit_id"]
     final["mapped_from_unit_id"] = None  # filled by S04 (BECAME)
     final["map_score"] = None
     return {"proposal": proposal, "final": final}
 
 
 def write_csv(t: dict[str, pd.DataFrame]) -> None:
+    out_dir = OUT if config.PROCEDURE_ID == config.DEFAULT_PROCEDURE else OUT / config.PROCEDURE_ID
+    out_dir.mkdir(parents=True, exist_ok=True)
     t["proposal"][["unit_id", "kind", "article", "path", "text", "celex", "title", "full_text"]].to_csv(
-        OUT / "proposal_units.csv", index=False)
+        out_dir / "proposal_units.csv", index=False)
     t["final"][["unit_id", "kind", "article", "path", "text", "celex", "mapped_from_unit_id", "map_score",
-                "title", "full_text", "m1", "text_as_adopted", "law_unit_id"]].to_csv(OUT / "final_units.csv", index=False)
+                "title", "full_text", "m1", "text_as_adopted", "law_unit_id"]].to_csv(out_dir / "final_units.csv", index=False)
     for k, df in t.items():
         df.to_parquet(config.CACHE / f"s02_{k}_units.parquet", index=False)
 
 
 def load_graph(t: dict[str, pd.DataFrame]) -> None:
     graph.apply_schema()
-    p = t["proposal"].drop(columns=["order", "celex"]).assign(celex="52021PC0206")
+    celex = str(config.PROC["texts"]["proposal"]["celex"])
+    p = t["proposal"].drop(columns=["order", "celex"]).assign(celex=celex)
     graph.merge_nodes("Provision", "unit_id", p, SOURCE)
     f = t["final"].drop(columns=["order", "mapped_from_unit_id", "map_score"])
     graph.merge_nodes("LegalUnit", "law_unit_id", f, SOURCE)

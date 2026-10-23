@@ -1,0 +1,12 @@
+# Install once: .venv/bin/pre-commit install
+# Protected file: changes need the repo owner's approval (see CLAUDE.md and .github/CODEOWNERS).
+repos:
+  - repo: local
+    hooks:
+      - id: tach
+        name: tach module boundaries
+        entry: tach check
+        language: python
+        additional_dependencies: ["tach==0.35.3"]
+        pass_filenames: false
+        files: ^(pipeline/.*\.py|tach\.toml)$

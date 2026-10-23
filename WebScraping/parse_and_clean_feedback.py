@@ -4,11 +4,11 @@ parse_and_clean_feedback.py
 ===========================
 Script unico e parametrico per il parsing, l'estrazione multi-formato,
 la pulizia del testo legale, il rilevamento di riferimenti normativi (regex)
-e il chunking semantico (per modelli di embedding) dei feedback sull'AI Act.
+e il chunking semantico (per modelli di embedding) dei feedback Have Your Say.
 
-Supporta:
-  - Stage 1: Inception Impact Assessment (PubID 13340)
-  - Stage 2: Proposal for a Regulation (PubID 14488)
+Supporta qualsiasi procedura legislativa definita in data_sources/procedures/<id>.yaml (default: ai_act):
+  - Stage 1: Inception Impact Assessment
+  - Stage 2: Proposal for a Regulation
 
 Autore: Antigravity AI (Senior Data Engineer)
 """
@@ -20,6 +20,7 @@ import re
 import unicodedata
 import argparse
 from typing import List, Dict, Any, Optional, Tuple
+import yaml
 
 # Librerie di estrazione PDF e DOCX
 try:
@@ -51,24 +52,80 @@ except ImportError:
 # CONFIGURAZIONE STAGES
 # =====================================================================
 
-STAGES_CONFIG = {
-    1: {
-        "publication_id": 13340,
-        "stage_name": "STAGE_1_INCEPTION_FEEDBACK",
-        "title": "Stage 1 (Inception Impact Assessment 2020 - PubID 13340)",
-        "raw_json": "feedback/stage1_inception_13340/raw_feedback_stage1_13340.json",
-        "parsed_json": "feedback/stage1_inception_13340/parsed_feedback_stage1_13340.json",
-        "attachments_dir": "feedback/stage1_inception_13340/attachments"
-    },
-    2: {
-        "publication_id": 14488,
-        "stage_name": "STAGE_2_PROPOSAL_FEEDBACK",
-        "title": "Stage 2 (Proposal for a Regulation 2021 - PubID 14488)",
-        "raw_json": "feedback/stage2_proposal_14488/raw_feedback_stage2_14488.json",
-        "parsed_json": "feedback/stage2_proposal_14488/parsed_feedback_stage2_14488.json",
-        "attachments_dir": "feedback/stage2_proposal_14488/attachments"
-    }
-}
+def load_stages_config(procedure_id: str = "ai_act", base_dir: Optional[str] = None) -> Dict[int, Dict[str, Any]]:
+    """
+    Carica la configurazione degli stage da data_sources/procedures/<procedure_id>.yaml.
+    Mappa:
+      - consultation.A.publication -> Stage 1 ("inception", cartella feedback/stage1_inception_<pub>/)
+      - consultation.B.publication -> Stage 2 ("proposal", cartella feedback/stage2_proposal_<pub>/)
+    I track la cui pubblicazione è null vengono ignorati.
+    """
+    if base_dir is None:
+        base_dir = os.path.dirname(os.path.abspath(__file__))
+    repo_root = os.path.abspath(os.path.join(base_dir, ".."))
+    proc_id = procedure_id.strip().removesuffix(".yaml")
+    procedures_dir = os.path.join(repo_root, "data_sources", "procedures")
+    yaml_path = os.path.join(procedures_dir, f"{proc_id}.yaml")
+
+    if not os.path.isfile(yaml_path):
+        known = ", ".join(sorted(f.removesuffix(".yaml") for f in os.listdir(procedures_dir) if f.endswith(".yaml")))
+        raise SystemExit(f"unknown procedure {proc_id!r}: expected data_sources/procedures/<id>.yaml, one of: {known}")
+
+    with open(yaml_path, "r", encoding="utf-8") as f:
+        data = yaml.safe_load(f) or {}
+
+    consultation = data.get("consultation", {})
+    configs: Dict[int, Dict[str, Any]] = {}
+
+    # Stage 1: Track A (inception)
+    cA = consultation.get("A")
+    if isinstance(cA, dict) and cA.get("publication") is not None:
+        pub_a = int(cA["publication"])
+        folder_a = f"feedback/stage1_inception_{pub_a}"
+        if proc_id == "ai_act":
+            title_a = "Stage 1 (Inception Impact Assessment 2020 - PubID 13340)"
+        else:
+            label_a = (cA.get("label") or "Inception Impact Assessment").strip()
+            title_a = f"Stage 1 ({label_a} - PubID {pub_a})"
+
+        configs[1] = {
+            "publication_id": pub_a,
+            "stage_name": "STAGE_1_INCEPTION_FEEDBACK",
+            "title": title_a,
+            "folder": folder_a,
+            "output_file": f"{folder_a}/raw_feedback_stage1_{pub_a}.json",
+            "raw_json": f"{folder_a}/raw_feedback_stage1_{pub_a}.json",
+            "parsed_json": f"{folder_a}/parsed_feedback_stage1_{pub_a}.json",
+            "attachments_dir": f"{folder_a}/attachments",
+        }
+
+    # Stage 2: Track B (proposal)
+    cB = consultation.get("B")
+    if isinstance(cB, dict) and cB.get("publication") is not None:
+        pub_b = int(cB["publication"])
+        folder_b = f"feedback/stage2_proposal_{pub_b}"
+        if proc_id == "ai_act":
+            title_b = "Stage 2 (Proposal for a Regulation 2021 - PubID 14488)"
+        else:
+            label_b = (cB.get("label") or "Proposal for a Regulation").strip()
+            title_b = f"Stage 2 ({label_b} - PubID {pub_b})"
+
+        configs[2] = {
+            "publication_id": pub_b,
+            "stage_name": "STAGE_2_PROPOSAL_FEEDBACK",
+            "title": title_b,
+            "folder": folder_b,
+            "output_file": f"{folder_b}/raw_feedback_stage2_{pub_b}.json",
+            "raw_json": f"{folder_b}/raw_feedback_stage2_{pub_b}.json",
+            "parsed_json": f"{folder_b}/parsed_feedback_stage2_{pub_b}.json",
+            "attachments_dir": f"{folder_b}/attachments",
+        }
+
+    return configs
+
+
+# Configurazione di default per retrocompatibilità (ai_act)
+STAGES_CONFIG = load_stages_config("ai_act")
 
 
 # =====================================================================
@@ -517,8 +574,16 @@ def chunk_legal_text(text: str, target_words: int = 400, overlap_words: int = 50
 # 6. PIPELINE DI PARSING PER SINGOLO STAGE
 # =====================================================================
 
-def parse_stage(stage_num: int, base_dir: str, target_chunk_words: int = 400, overlap_words: int = 50):
-    conf = STAGES_CONFIG[stage_num]
+def parse_stage(
+    stage_num: int,
+    base_dir: str,
+    target_chunk_words: int = 400,
+    overlap_words: int = 50,
+    stages_config: Optional[Dict[int, Dict[str, Any]]] = None
+):
+    if stages_config is None:
+        stages_config = STAGES_CONFIG
+    conf = stages_config[stage_num]
     raw_path = os.path.join(base_dir, conf["raw_json"])
     parsed_path = os.path.join(base_dir, conf["parsed_json"])
     attachments_dir = os.path.join(base_dir, conf["attachments_dir"])
@@ -643,7 +708,12 @@ def parse_stage(stage_num: int, base_dir: str, target_chunk_words: int = 400, ov
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Estrae, pulisce e suddivide in chunk i feedback per Stage 1 e Stage 2."
+        description="Estrae, pulisce e suddivide in chunk i feedback Have Your Say per Stage 1 e Stage 2."
+    )
+    parser.add_argument(
+        "--procedure", "-p",
+        default="ai_act",
+        help="ID procedura in data_sources/procedures/<id>.yaml (default: ai_act)"
     )
     parser.add_argument(
         "--stage", "-s",
@@ -656,12 +726,19 @@ def main():
 
     args = parser.parse_args()
     script_dir = os.path.dirname(os.path.abspath(__file__))
+    stages_config = load_stages_config(args.procedure, script_dir)
 
     if args.stage in ["1", "all"]:
-        parse_stage(1, script_dir, args.chunk_size, args.chunk_overlap)
+        if 1 in stages_config:
+            parse_stage(1, script_dir, args.chunk_size, args.chunk_overlap, stages_config)
+        elif args.stage == "1":
+            print(f"⚠️ Stage 1 non configurato per la procedura '{args.procedure}' (publication è null).")
 
     if args.stage in ["2", "all"]:
-        parse_stage(2, script_dir, args.chunk_size, args.chunk_overlap)
+        if 2 in stages_config:
+            parse_stage(2, script_dir, args.chunk_size, args.chunk_overlap, stages_config)
+        elif args.stage == "2":
+            print(f"⚠️ Stage 2 non configurato per la procedura '{args.procedure}' (publication è null).")
 
 
 if __name__ == "__main__":

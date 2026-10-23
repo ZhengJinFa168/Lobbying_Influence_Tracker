@@ -12,7 +12,7 @@ Python statistics on top of the query results:
   a uniformly random choice per issue, and a permutation of stances within each issue (95% interval; per user
   type only, since a within-issue permutation leaves the overall share unchanged).
 - access_vs_echo.csv: share of echoed (organisation, amendment) pairs where a tabling MEP has a recorded
-  meeting with the organisation, against the same organisations paired with random AI Act tabling MEPs that
+  meeting with the organisation, against the same organisations paired with random tabling MEPs of the procedure that
   appear in the meetings data. Label: meetings recorded in 2020 and Jun-Oct 2024 only.
 """
 from __future__ import annotations
@@ -25,6 +25,8 @@ import pandas as pd
 from scipy.stats import spearmanr
 
 from . import config, graph
+
+PROCEDURE_AWARE = True  # no procedure-specific inputs: organisations, registers and graph queries are generic
 
 log = logging.getLogger("s10")
 RNG = np.random.default_rng(10)
@@ -82,6 +84,8 @@ def money_vs_influence(orgs: pd.DataFrame) -> pd.DataFrame:
 def track_a_alignment(pos: pd.DataFrame, n_perm: int = 1000) -> pd.DataFrame:
     from .s09_judge_and_stance import ISSUES
 
+    if pos.empty or "aligned" not in pos.columns:  # no Track A codebook for this procedure: no positions
+        return pd.DataFrame()
     k = {i["issue_id"]: len(i["choices"]) for i in ISSUES}
     p = pos[pos.aligned.notna()].copy()
     p["aligned"] = p.aligned.astype(bool)
@@ -138,6 +142,23 @@ def access_vs_echo(pairs: pd.DataFrame, n_rep: int = 200) -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
+def echoed_amendments_all() -> pd.DataFrame:
+    """Track B: distinct echoed amendments over all organisation types, under the headline rule (stored tiers) and the
+    rule used until 2026-10-23 (verbatim, or implements / partial), with the share that survived / reached the law."""
+    rules = {"headline (T1/T2)": "e.tier IN ['T1','T2'] AND NOT coalesce(e.hidden, false)",
+             "previous rule": "(coalesce(e.verbatim, false) OR e.llm_relation IN ['implements','partial']) "
+                              "AND NOT coalesce(e.hidden, false)"}
+    rows = []
+    for rule, where in rules.items():
+        r = graph.run(f"""MATCH (:Comment {{track:'B'}})<-[:PART_OF]-(:Chunk)-[e:ECHOED_IN]->(a:Amendment) WHERE {where}
+WITH DISTINCT a RETURN count(a) AS amendments, sum(CASE WHEN a.survived THEN 1 ELSE 0 END) AS survived,
+     sum(CASE WHEN a.reached_law THEN 1 ELSE 0 END) AS reached_law""")[0]
+        rows.append(dict(rule=rule, **r))
+    df = pd.DataFrame(rows)
+    df["share_survived"] = (df.survived / df.amendments).round(3)
+    df["share_reached_law"] = (df.reached_law / df.amendments).round(3)
+    return df
+
 def main(track: str | None = None) -> None:
     q = run_queries()
     mvi = money_vs_influence(q["12_org_money"])
@@ -146,6 +167,7 @@ def main(track: str | None = None) -> None:
     ta.to_csv(R / "track_a_alignment.csv", index=False)
     ave = access_vs_echo(q["09_access_echo_pairs"])
     ave.to_csv(R / "access_vs_echo.csv", index=False)
+    echoed_amendments_all().to_csv(R / "echoed_amendments_all.csv", index=False)
     summary = dict(
         funnel=q["02_reach_funnel"].to_dict("records"),
         track_a_alignment=ta.to_dict("records"),

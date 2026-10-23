@@ -1,0 +1,23 @@
+# Separate Neo4j 5 + APOC + GDS for the Digital Services Act run (2020/0361(COD)), so the AI Act graph is untouched.
+# Ports 7475 (browser) / 7688 (bolt) on localhost; data in neo4j/data-dsa. Auth comes from .env.dsa (gitignored),
+# which must be passed with --env-file (without it compose reads neo4j/.env).
+# Usage (from the repo root): docker compose -f neo4j/docker-compose.dsa.yml --env-file .env.dsa up -d
+# Point the pipeline at it:   set -a; . ./.env.dsa; set +a   (config.py's load_dotenv does not override these)
+name: reversa-dsa
+services:
+  neo4j:
+    image: neo4j:5.26-community
+    container_name: reversa-neo4j-dsa
+    ports:
+      - "127.0.0.1:7475:7474"
+      - "127.0.0.1:7688:7687"
+    environment:
+      NEO4J_AUTH: "${NEO4J_USER:-neo4j}/${NEO4J_PASSWORD:?set NEO4J_PASSWORD in .env.dsa}"
+      NEO4J_PLUGINS: '["apoc", "graph-data-science"]'
+      NEO4J_dbms_security_procedures_unrestricted: "apoc.*,gds.*"
+      NEO4J_server_memory_heap_max__size: "2G"
+      NEO4J_server_memory_pagecache_size: "1G"
+    volumes:
+      - ./data-dsa:/data
+      - ./logs-dsa:/logs
+    restart: unless-stopped

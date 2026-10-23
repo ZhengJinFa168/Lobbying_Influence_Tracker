@@ -5,10 +5,10 @@ with an explanation.
 Two L2-regularised logistic regressions on the committee amendments (labels from S04); the law model leaves out
 pure deletions, which cannot reach the law under S04's definition (inserted wording kept):
     P(survived)       = P(amendment survived as an adopted report amendment)
-    P(reached_law)    = P(... and its inserted wording is in Regulation 2024/1689)
+    P(reached_law)    = P(... and its inserted wording is in the final law, e.g. Regulation 2024/1689)
 Features (all known when the amendment is tabled, plus whether it echoes lobby text):
     committee, lead author's political group, tabled by a rapporteur of the lead committee, log co-signers,
-    new provision / deletion, log inserted words, part of the act (recital / article / annex / Art 3 / Art 5),
+    new provision / deletion, log inserted words, part of the act (recital / article / annex / salient articles),
     echoes lobby text (T1/T2), number of organisations echoed, user types echoed (NGO / industry).
 Outputs:
     Amendment.p_survived, Amendment.p_reached_law, Amendment.p_explain (top contributions, JSON) in Neo4j;
@@ -28,13 +28,18 @@ from sklearn.model_selection import StratifiedKFold, cross_val_predict
 
 from . import config, graph
 
+PROCEDURE_AWARE = True  # opted in to multi-procedure runs via config.PROC
+
 log = logging.getLogger("s10b")
 SOURCE = "s10b_reach_model"
-RAPPORTEURS = {"Brando BENIFEI", "Dragoş TUDORACHE"}  # IMCO-LIBE co-rapporteurs for 2021/0106(COD)
+RAPPORTEURS = set(config.PROC["parliament"]["rapporteurs"])
 ECHO = "e.tier IN ['T1','T2'] AND NOT coalesce(e.hidden, false)"
 
+_rapps = " / ".join(r.split()[-1].title() for r in config.PROC["parliament"]["rapporteurs"])
+_rapp_title = "co-rapporteur" if len(RAPPORTEURS) > 1 else "rapporteur"
+
 LABELS = {
-    "rapporteur": "tabled by a co-rapporteur (Benifei / Tudorache)",
+    "rapporteur": f"tabled by a {_rapp_title} ({_rapps})" if _rapps else f"tabled by a {_rapp_title}",
     "log_cosigners": "more co-signers",
     "is_new": "adds a new provision",
     "deletion": "deletes a provision",
@@ -68,9 +73,12 @@ def frame() -> pd.DataFrame:
     df = pd.DataFrame(rows)
     df["rapporteur"] = df.names.map(lambda n: int(bool(RAPPORTEURS & set(n or []))))
     t = df.target.fillna(df.unit_id).fillna("")
-    df["part"] = np.select([t.str.startswith("Rec"), t.str.startswith("Annex"), t.str.match(r"^Art3\b|^Art3\("),
-                            t.str.match(r"^Art5\b|^Art5\(")], ["recitals", "annexes", "Art 3 (definitions)",
-                                                               "Art 5 (prohibitions)"], "other articles")
+    condlist = [t.str.startswith("Rec"), t.str.startswith("Annex")]
+    choicelist = ["recitals", "annexes"]
+    for s in (config.PROC.get("analysis") or {}).get("salient_articles") or []:
+        condlist.append(t.str.match(s["match"]))
+        choicelist.append(s["label"])
+    df["part"] = np.select(condlist, choicelist, "other articles")
     df["part"] = np.where(t == "", "unplaced", df.part)
     return df
 
@@ -86,8 +94,9 @@ def design(df: pd.DataFrame) -> pd.DataFrame:
     X["log_echo_orgs"] = np.log1p(df.echo_orgs)
     X["echo_ngo"] = df.echo_types.map(lambda t: int("NGO" in (t or []))).astype(int)
     X["echo_industry"] = df.echo_types.map(lambda t: int(bool({"COMPANY", "BUSINESS_ASSOCIATION"} & set(t or [])))).astype(int)
+    lead_comm = config.PROC["parliament"]["lead_committee"]
     # one-hot, dropping the most common level as the reference
-    for col, ref in [("committee", "IMCO-LIBE"), ("lead_group", "S&D"), ("part", "other articles")]:
+    for col, ref in [("committee", lead_comm), ("lead_group", "S&D"), ("part", "other articles")]:
         name = "group" if col == "lead_group" else col
         for v in sorted(df[col].fillna("NA").unique()):
             if v != ref:

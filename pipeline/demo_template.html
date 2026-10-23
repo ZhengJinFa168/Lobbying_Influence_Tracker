@@ -211,13 +211,17 @@ tr.sel td { background: var(--accent-soft) !important; }
 <div class="sk" id="sk" hidden onclick="if (event.target === this) closeSearch()"><div class="skbox">
   <input id="skq" placeholder="Search lobbies, politicians, articles, stories, pages…" autocomplete="off" spellcheck="false">
   <div class="skr" id="skr"></div>
-  <div class="skfoot"><span><kbd>↑</kbd> <kbd>↓</kbd> move</span><span><kbd>Enter</kbd> open</span><span><kbd>Esc</kbd> close</span><span style="margin-left:auto">try “Art 5”, “Twilio”, “Benifei”, “Greens”</span></div>
+  <div class="skfoot"><span><kbd>↑</kbd> <kbd>↓</kbd> move</span><span><kbd>Enter</kbd> open</span><span><kbd>Esc</kbd> close</span><span style="margin-left:auto" id="skhint">try “Art 5”, “Twilio”, “Benifei”, “Greens”</span></div>
 </div></div>
 <main id="app"></main>
 <script id="data" type="application/json">__DATA__</script>
 <script>
 const D = JSON.parse(document.getElementById('data').textContent);
 const ACT = D.acts.find(a => a.ready);
+if (ACT) {
+  const chip = document.getElementById('actchip'); if (chip) chip.textContent = `${ACT.short} · ${ACT.procedure}`;
+  const hint = document.getElementById('skhint'); if (hint && ACT.search_hint) hint.textContent = ACT.search_hint;
+}
 const app = document.getElementById('app');
 const css = v => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
 const esc = s => (s == null ? '' : String(s)).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
@@ -301,7 +305,7 @@ function overview() {
     <div class="n">${esc(a.name)}</div><div class="p">${esc(a.id)} · ${esc(a.law)}</div>
     <div class="p" style="margin-top:4px">${a.ready ? '<span class="badge acc">processed</span>' : 'not processed yet: run the pipeline on this procedure'}</div></button>`).join('')}</div>
   <div class="grid g4">
-    ${stat(num(D.counts.nodes.Comment), 'public comments', '2020 inception + 2021 proposal')}
+    ${stat(num(D.counts.nodes.Comment), 'public comments', ACT.consultation_sub || '2020 inception + 2021 proposal')}
     ${stat(num(D.counts.nodes.Organisation), 'organisations', 'companies, associations, NGOs, unions')}
     ${stat(num(D.counts.nodes.Amendment), 'committee amendments', 'tabled by ' + num(Object.values(D.meps).filter(m => m.tabled).length) + ' MEPs')}
     ${stat(pct(BASE.amendment_share_reached_law), 'of amendments reached the law', pct(BASE.amendment_share_survived) + ' survived into the EP report')}
@@ -333,7 +337,7 @@ function overview() {
 const stat = (v, l, s) => `<div class="card stat"><div class="v">${v}</div><div class="l">${l}</div>${s ? `<div class="s">${s}</div>` : ''}</div>`;
 function outcomeBadges(s) {
   return `${s.survived ? '<span class="badge good">survived EP report</span>' : '<span class="badge bad">dropped before the report</span>'}
-    ${s.law ? `<span class="badge good">reached the law · ${esc((s.law_unit || '').replace('2024/1689:', ''))}</span>` : (s.survived ? '<span class="badge bad">not in final law</span>' : '')}
+    ${s.law ? `<span class="badge good">reached the law · ${esc((s.law_unit || '').replace((ACT.unit_prefix ? ACT.unit_prefix + ':' : '2024/1689:'), ''))}</span>` : (s.survived ? '<span class="badge bad">not in final law</span>' : '')}
     ${s.verbatim ? `<span class="badge acc">verbatim · ${s.run} words</span>` : ''}`;
 }
 function funnelPlot(id) {
@@ -353,7 +357,7 @@ let LSORT = 'influence', LTYPE = '', LQ = '';
 function lobbiesPage() {
   PAGER = {};
   app.innerHTML = `<h1>Top lobbies</h1>
-  <p class="lead">Ranked by <b>influence score</b>: every judged echo of an organisation's 2021 comment in a committee amendment, weighted by match strength and tier,
+  <p class="lead">Ranked by <b>influence score</b>: every judged echo of an organisation's ${esc(ACT.track_b_year || '2021')} comment in a committee amendment, weighted by match strength and tier,
     and counted up to three times when the amendment survived into the EP report and again when it reached the law.</p>
   <div class="controls"><input type="search" id="lq" placeholder="Filter by name or country…" value="${esc(LQ)}" style="flex:1 1 240px">
     <select id="ltype"><option value="">All organisation types</option>${Object.keys(TYPES).map(t => `<option value="${t}" ${t === LTYPE ? 'selected' : ''}>${tname(t)}</option>`).join('')}</select>
@@ -364,7 +368,7 @@ function lobbiesPage() {
       <span class="num">In law</span><span class="num hide-s">Pre-bill</span><span class="num hide-s">Spend</span></div>
     <div id="lrows"></div>
   </div>
-  <p class="muted small">Pre-bill = share of the organisation's 2020 positions that the Commission's proposal adopted. Spend = latest register figure (2026), not 2021.</p>`;
+  <p class="muted small">Pre-bill = share of the organisation's ${esc(ACT.track_a_year || '2020')} positions that the Commission's proposal adopted. Spend = latest register figure${ACT.is_default ? ' (2026), not 2021' : (ACT.register_year ? ' (' + esc(ACT.register_year) + ')' + (ACT.proposal_year ? ', not ' + esc(ACT.proposal_year) : '') : '')}.</p>`;
   const draw = () => {
     const q = LQ.toLowerCase();
     const rows = LOBBIES.filter(o => (o.n_echoed || o.n_positions) && (!LTYPE || o.type === LTYPE)
@@ -408,7 +412,7 @@ function lobbyPage(id) {
     ${stat(o.n_echoed, 'amendments echo their wording', o.n_verbatim + ' word for word')}
     ${stat(o.n_survived, 'survived into the EP report', o.n_echoed ? pct(o.n_survived / o.n_echoed, 0) + ' of echoed vs ' + pct(BASE.amendment_share_survived, 0) + ' base' : '')}
     ${stat(o.n_law, 'reached the final law', o.expected_law != null ? 'model expected ' + o.expected_law.toFixed(1) : '')}
-    ${stat(o.aligned_share == null ? '–' : pct(o.aligned_share, 0), 'pre-bill positions adopted', o.n_positions ? o.n_positions + ' positions coded from the 2020 comment' : 'no 2020 comment')}
+    ${stat(o.aligned_share == null ? '–' : pct(o.aligned_share, 0), 'pre-bill positions adopted', o.n_positions ? o.n_positions + ' positions coded from the ' + (ACT.track_a_year || '2020') + ' comment' : 'no ' + (ACT.track_a_year || '2020') + ' comment')}
   </div>
   <div class="grid g2 mt" id="sec-money">
     <div class="card"><h3>Money and access</h3><div class="kv">
@@ -417,22 +421,22 @@ function lobbyPage(id) {
       <div>EP access passes</div><div>${num(o.ep_passes)}</div>
       <div>Commission meetings</div><div>${num(o.ec_meetings)} <span class="muted">in 2019–24 (${num(o.ec_meetings_all)} all-time)</span></div>
       <div>MEP meetings declared</div><div>${num(o.mep_meetings_register)}</div>
-      <div>Recorded MEP meetings</div><div>${(o.meetings || []).length} <span class="muted">(${(o.meetings || []).filter(m => m.ai).length} about AI)</span></div>
+      <div>Recorded MEP meetings</div><div>${(o.meetings || []).length} <span class="muted">(${(o.meetings || []).filter(m => m.ai).length} about ${esc(ACT.topic || 'AI')})</span></div>
       ${o.lobbyfacts_url ? `<div>Register</div><div><a href="${esc(o.lobbyfacts_url)}" target="_blank" rel="noopener">LobbyFacts datacard ↗</a></div>` : ''}
-    </div><p class="muted small">Register figures are the 2026 snapshot, not 2021.${o.match_method && o.match_method !== 'tr_number' ? ' Matched to the register by ' + esc(o.match_method.replace(/_/g, ' ')) + '.' : ''}</p></div>
+    </div><p class="muted small">${ACT.is_default ? 'Register figures are the 2026 snapshot, not 2021.' : 'Register figures from LobbyFacts / Integrity Watch.'}${o.match_method && o.match_method !== 'tr_number' ? ' Matched to the register by ' + esc(o.match_method.replace(/_/g, ' ')) + '.' : ''}</p></div>
     <div class="card"><h3>Interests</h3><div class="kv">
       <div>Category</div><div>${esc(o.category || '–')}</div><div>Represents</div><div>${esc(o.interest || '–')}</div>
       <div>Head office</div><div>${esc(o.head_office || o.country || '–')}</div><div>Size</div><div>${esc(o.size || '–')}</div></div>
       <div class="chips mt">${(o.fields || []).map(f => `<span class="chip">${esc(f)}</span>`).join('') || '<span class="muted small">no fields of interest declared</span>'}</div></div>
   </div>
-  <div class="section-title" id="sec-said"><h2>What they said</h2><span class="muted small">${comm.map(c => `<a href="${esc(c.url)}" target="_blank" rel="noopener">${c.track === 'A' ? '2020 inception comment' : '2021 proposal comment'} (${esc(c.date)}) ↗</a>`).join(' · ')}</span></div>
+  <div class="section-title" id="sec-said"><h2>What they said</h2><span class="muted small">${comm.map(c => `<a href="${esc(c.url)}" target="_blank" rel="noopener">${c.track === 'A' ? (esc(ACT.track_a_short) || '2020 inception comment') : (esc(ACT.track_b_short) || '2021 proposal comment')} (${esc(c.date)}) ↗</a>`).join(' · ')}</span></div>
   <div class="grid g2">
     <div class="card"><h3>Their words that came back</h3>${best.slice(0, 3).map(([s, i]) => `<div style="margin-bottom:14px"><div class="textbox quote">“${highlight(trunc(s.chunk, 330), s.added)}”</div>
       <div class="small mt" style="margin-top:6px">→ <a href="#/story/${i}">${esc(s.location)}</a> · ${outcomeBadges(s)}</div></div>`).join('') || '<div class="empty">No judged echo in a committee amendment.</div>'}</div>
-    <div class="card"><h3>Positions in 2020 (pre-bill)</h3>${(o.positions || []).length ? `<table><thead><tr><th>Issue</th><th>Their stance</th><th>Proposal</th></tr></thead><tbody>
+    <div class="card"><h3>Positions in ${esc(ACT.track_a_year || '2020')} (pre-bill)</h3>${(o.positions || []).length ? `<table><thead><tr><th>Issue</th><th>Their stance</th><th>Proposal</th></tr></thead><tbody>
       ${o.positions.map(p => `<tr><td>${esc(p.label)}</td><td>${esc(p.stance.replace(/_/g, ' '))}${p.quote ? `<div class="muted small">“${esc(trunc(p.quote, 140))}”</div>` : ''}</td>
       <td>${p.aligned == null ? '<span class="muted">–</span>' : p.aligned ? '<span class="badge good">adopted</span>' : '<span class="badge bad">not adopted</span>'}</td></tr>`).join('')}</tbody></table>`
-      : '<div class="empty">No 2020 comment.</div>'}</div>
+      : '<div class="empty">No ' + (ACT.track_a_year || '2020') + ' comment.</div>'}</div>
   </div>
   <div class="section-title" id="sec-went"><h2>Where their wording went</h2><span class="muted small">${o.n_echoed} committee amendments · click a row for the full story</span></div>
   <div class="card" style="overflow:auto"><table><thead><tr><th>Amendment</th><th>Lead MEP</th><th>Judge</th><th>Outcome</th><th class="r">P(survive)</th><th class="r">P(law)</th></tr></thead><tbody>
@@ -449,11 +453,11 @@ function lobbyPage(id) {
     ${(o.meetings || []).some(x => x.mep === c.mep) ? ' · <span class="badge acc">met them</span>' : ''}</div></div></div>`).join('') || '<div class="empty">None.</div>'}</div>
   <div class="grid g2 mt" id="sec-meet">
     <div class="card"><h3>Recorded meetings with MEPs</h3>${(o.meetings || []).length ? `<table><tbody>${o.meetings.slice(0, 25).map(m => `<tr><td class="small muted" style="white-space:nowrap">${esc(m.date)}</td>
-      <td><a href="#/mep/${m.mep}">${esc(m.name)}</a> <span class="muted small">${esc(m.grp)}${m.role && m.role !== 'Member' ? ' · ' + esc(m.role) : ''}</span><div class="small">${esc(m.title || '')} ${m.ai ? '<span class="badge acc">AI</span>' : ''}</div></td></tr>`).join('')}</tbody></table>`
-      : '<div class="empty">No recorded meeting (Integrity Watch covers 2020 and Jun–Oct 2024 only).</div>'}</div>
+      <td><a href="#/mep/${m.mep}">${esc(m.name)}</a> <span class="muted small">${esc(m.grp)}${m.role && m.role !== 'Member' ? ' · ' + esc(m.role) : ''}</span><div class="small">${esc(m.title || '')} ${m.ai ? `<span class="badge acc">${esc(ACT.topic || 'AI')}</span>` : ''}</div></td></tr>`).join('')}</tbody></table>`
+      : '<div class="empty">No recorded meeting (' + (ACT.is_default ? 'Integrity Watch covers 2020 and Jun–Oct 2024 only' : 'Integrity Watch') + ').</div>'}</div>
     <div class="card"><h3>Shared text with</h3>${(o.similar || []).length ? o.similar.map(s => `<div class="small" style="margin:4px 0"><a href="#/lobby/${encodeURIComponent(s.other)}">${esc(s.name)}</a> <span class="muted">· ${s.chunks} near-identical paragraphs</span></div>`).join('')
       : '<div class="empty">No near-identical paragraphs with other organisations.</div>'}
-      ${(o.track_a || []).length ? `<h3 class="mt2">2020 wording in the proposal</h3>${o.track_a.slice(0, 6).map(t => `<div class="small" style="margin:4px 0">${artOf(t.unit) ? `<a href="#/article/${artOf(t.unit)}"><b>${esc(t.unit)}</b></a>` : `<b>${esc(t.unit)}</b>`} · ${esc(t.relation || '')} ${t.in_law ? '<span class="badge good">still in the law</span>' : '<span class="badge bad">changed before the law</span>'}</div>`).join('')}` : ''}</div>
+      ${(o.track_a || []).length ? `<h3 class="mt2">${esc(ACT.track_a_year || '2020')} wording in the proposal</h3>${o.track_a.slice(0, 6).map(t => `<div class="small" style="margin:4px 0">${artOf(t.unit) ? `<a href="#/article/${artOf(t.unit)}"><b>${esc(t.unit)}</b></a>` : `<b>${esc(t.unit)}</b>`} · ${esc(t.relation || '')} ${t.in_law ? '<span class="badge good">still in the law</span>' : '<span class="badge bad">changed before the law</span>'}</div>`).join('')}` : ''}</div>
   </div>`;
 }
 
@@ -472,7 +476,7 @@ function storyPage(n) {
   <div class="controls"><select id="spick" style="max-width:100%">${D.stories.map((x, k) => `<option value="${k}" ${k === i ? 'selected' : ''}>${x.law ? '✓ ' : ''}${esc(x.org_name)} → ${esc(x.location)}</option>`).join('')}</select>
     <span class="muted small">✓ = reached the law</span></div>
   <h1>${esc(s.org_name)} → ${esc(s.location)}</h1>
-  <p class="lead">How one paragraph of a ${tname(s.type).toLowerCase()}'s 2021 comment shows up in a committee amendment${s.survived ? ', the Parliament\'s report' : ''}${s.law ? ' and the final law' : ''}.
+  <p class="lead">How one paragraph of a ${tname(s.type).toLowerCase()}'s ${esc(ACT.track_b_year || '2021')} comment shows up in a committee amendment${s.survived ? ', the Parliament\'s report' : ''}${s.law ? ' and the final law' : ''}.
     ${sa ? `<br><a href="#/article/${sa}" class="small">See every comment similar to ${esc(ARTS[ARTIDX[sa]].label)} →</a>` : ''}</p>
   <div class="grid g-side"><div class="card"><div class="timeline">
     <div class="step"><span class="knob"></span><div class="when">${esc(s.comment_date)} · Have Your Say</div>
@@ -484,12 +488,12 @@ function storyPage(n) {
       <div class="chips" style="margin-bottom:8px">${(s.meps || []).slice(0, 8).map(m => `<a class="chip" href="#/mep/${m.id}">${m.lead ? '★ ' : ''}${esc(m.name)} · ${gname(m.group)}</a>`).join('')}${(s.meps || []).length > 8 ? `<span class="chip">+${s.meps.length - 8}</span>` : ''}</div>
       <div class="textbox">${diff(s.old_text || '', s.new_text || '')}</div>
       <div class="small mt" style="margin-top:6px"><del>struck</del> = proposal words removed · <ins>green</ins> = words the amendment inserts${s.am_src ? ` · <a href="${esc(s.am_src)}" target="_blank" rel="noopener">source PDF ↗</a>` : ''}</div></div>
-    <div class="step ${s.survived ? '' : 'off'}"><span class="knob"></span><div class="when">${s.survived ? esc(s.adopted_date || '2023-06') + ' · EP plenary report' : 'EP plenary report'}</div>
+    <div class="step ${s.survived ? '' : 'off'}"><span class="knob"></span><div class="when">${s.survived ? esc(s.adopted_date || ACT.report_date || '2023-06') + ' · EP plenary report' : 'EP plenary report'}</div>
       ${s.survived ? `<div class="title">Survives as report amendment ${esc(s.adopted)}</div><div class="textbox">${highlight(s.adopted_text, s.added)}</div>
         <div class="small mt" style="margin-top:6px">survival score ${(+s.survival_score).toFixed(2)} · <mark>highlighted</mark> = words of the committee amendment</div>`
         : '<div class="title">Not in the Parliament\'s report</div><div class="muted">No report amendment on this provision carries its inserted wording.</div>'}</div>
-    <div class="step ${s.law ? '' : 'off'}"><span class="knob"></span><div class="when">13 June 2024 · ${esc(ACT.law)}</div>
-      ${s.law ? `<div class="title">In the final law: ${esc((s.law_unit || '').replace('2024/1689:', ''))}</div><div class="textbox">${highlight(s.law_text, s.added)}</div>
+    <div class="step ${s.law ? '' : 'off'}"><span class="knob"></span><div class="when">${esc(ACT.final_date_label || '13 June 2024')} · ${esc(ACT.law)}</div>
+      ${s.law ? `<div class="title">In the final law: ${esc((s.law_unit || '').replace((ACT.unit_prefix ? ACT.unit_prefix + ':' : '2024/1689:'), ''))}</div><div class="textbox">${highlight(s.law_text, s.added)}</div>
         <div class="small mt" style="margin-top:6px">${pct(s.kept, 0)} of the amendment's new words are in the final text</div>`
         : `<div class="title">${s.survived ? 'Dropped in the trilogue' : 'Did not reach the law'}</div><div class="muted">${s.survived ? 'The report amendment\'s new wording is not in the final act.' : ''}</div>`}</div>
   </div></div>
@@ -514,7 +518,7 @@ function storyPage(n) {
 // ------------------------------------------------------------ MEPs
 function mepsPage() {
   const rows = Object.values(D.meps).filter(m => m.tabled).sort((a, b) => (b.echoed_orgs || []).length - (a.echoed_orgs || []).length || b.tabled - a.tabled);
-  app.innerHTML = `<h1>Politicians</h1><p class="lead">MEPs who tabled AI Act committee amendments, ordered by how many organisations' wording appears in them.</p>
+  app.innerHTML = `<h1>Politicians</h1><p class="lead">MEPs who tabled ${esc(ACT.short)} committee amendments, ordered by how many organisations' wording appears in them.</p>
   <div class="controls"><input type="search" id="mq" placeholder="Search name, party, country…" style="flex:1 1 280px"></div>
   <div class="grid g3" id="mgrid"></div>`;
   const draw = () => { const q = mq.value.toLowerCase();
@@ -529,23 +533,23 @@ function mepPage(id) {
   const mi = MEPLIST.findIndex(x => String(x.id) === String(id));
   app.innerHTML = `${crumbs([['#/meps', 'Politicians'], [null, m.name]], ...neighbours(MEPLIST, mi, x => '#/mep/' + x.id, x => x.name))}
   <div style="display:flex;gap:20px;align-items:flex-end;flex-wrap:wrap">${avatar(m, true)}<div>
-    <span class="badge">${gname(m.group)}</span> ${m.rapporteur ? '<span class="badge acc">AI Act co-rapporteur</span>' : ''}
+    <span class="badge">${gname(m.group)}</span> ${m.rapporteur ? `<span class="badge acc">${esc(ACT.short)} ${ACT.rapporteurs && ACT.rapporteurs.length > 1 ? 'co-rapporteur' : 'rapporteur'}</span>` : ''}
     <h1 style="margin-top:8px">${esc(m.name)}</h1>
     <p class="lead" style="margin:0">${esc(m.party || '')}${m.country ? ' · ' + esc(m.country) : ''}${m.birth_year ? ' · born ' + esc(m.birth_year) : ''}</p>
     <div class="small mt">${[m.ep_url && `<a href="${esc(m.ep_url)}" target="_blank" rel="noopener">European Parliament profile ↗</a>`, m.homepage && `<a href="${esc(m.homepage)}" target="_blank" rel="noopener">website ↗</a>`, m.x && `<a href="${esc(m.x)}" target="_blank" rel="noopener">X ↗</a>`].filter(Boolean).join(' · ')}</div>
   </div></div>
-  <div class="grid g4 mt2">${stat(m.tabled, 'AI Act amendments tabled', m.lead + ' as lead author')}${stat(m.survived, 'survived into the EP report', m.tabled ? pct(m.survived / m.tabled, 0) + ' vs ' + pct(BASE.amendment_share_survived, 0) + ' overall' : '')}
+  <div class="grid g4 mt2">${stat(m.tabled, esc(ACT.short) + ' amendments tabled', m.lead + ' as lead author')}${stat(m.survived, 'survived into the EP report', m.tabled ? pct(m.survived / m.tabled, 0) + ' vs ' + pct(BASE.amendment_share_survived, 0) + ' overall' : '')}
     ${stat(m.law, 'reached the final law', rate == null ? '' : pct(rate, 1) + ' vs ' + pct(BASE.amendment_share_reached_law, 1) + ' overall')}${stat((m.echoed_orgs || []).length, 'lobbies whose wording they used', '')}</div>
   <div class="grid g2 mt">
     <div class="card"><h3>Lobby wording in their amendments</h3>${(m.echoed_orgs || []).length ? `<table><tbody>${m.echoed_orgs.map(e => `<tr class="click" onclick="go('#/lobby/${encodeURIComponent(e.org)}')">
       <td>${tdot(e.type)}${esc(e.name)}<div class="muted small">${tname(e.type)}</div></td><td class="r">${e.amendments} amend.</td><td class="r">${e.law ? `<b>${e.law} in law</b>` : '–'}</td></tr>`).join('')}</tbody></table>` : '<div class="empty">None of their amendments echoes a consultation comment.</div>'}</div>
     <div class="card"><h3>Recorded meetings with consultation respondents</h3>${(m.meetings || []).length ? `<table><tbody>${m.meetings.slice(0, 30).map(x => `<tr><td class="small muted" style="white-space:nowrap">${esc(x.date)}</td>
-      <td><a href="#/lobby/${encodeURIComponent(x.org)}">${esc(x.name)}</a> ${x.ai ? '<span class="badge acc">AI</span>' : ''}<div class="small">${esc(x.title || '')}${x.role && x.role !== 'Member' ? ' · as ' + esc(x.role) : ''}</div></td></tr>`).join('')}</tbody></table>`
-      : '<div class="empty">No recorded meeting with a consultation respondent (Integrity Watch: 2020 and Jun–Oct 2024 only).</div>'}</div>
+      <td><a href="#/lobby/${encodeURIComponent(x.org)}">${esc(x.name)}</a> ${x.ai ? `<span class="badge acc">${esc(ACT.topic || 'AI')}</span>` : ''}<div class="small">${esc(x.title || '')}${x.role && x.role !== 'Member' ? ' · as ' + esc(x.role) : ''}</div></td></tr>`).join('')}</tbody></table>`
+      : '<div class="empty">No recorded meeting with a consultation respondent (' + (ACT.is_default ? 'Integrity Watch: 2020 and Jun–Oct 2024 only' : 'Integrity Watch') + ').</div>'}</div>
   </div>
   <div class="grid g2 mt">
-    <div class="card"><h3>Committees (2019–2024)</h3>${(m.committees || []).length ? `<table><tbody>${m.committees.map(c => `<tr><td><b>${esc(c.abbr || '')}</b></td><td>${esc(c.name)}</td><td class="muted">${esc(c.role)}</td></tr>`).join('')}</tbody></table>` : '<div class="empty">–</div>'}</div>
-    <div class="card"><h3>Declared outside activities (2019 declaration)</h3>${(m.outside_activities || []).length ? `<ul style="margin:0;padding-left:18px">${m.outside_activities.map(a => `<li class="small">${esc(a)}</li>`).join('')}</ul>` : '<div class="empty">None listed in the data.</div>'}</div>
+    <div class="card"><h3>Committees (${esc(ACT.term_years || '2019–2024')})</h3>${(m.committees || []).length ? `<table><tbody>${m.committees.map(c => `<tr><td><b>${esc(c.abbr || '')}</b></td><td>${esc(c.name)}</td><td class="muted">${esc(c.role)}</td></tr>`).join('')}</tbody></table>` : '<div class="empty">–</div>'}</div>
+    <div class="card"><h3>Declared outside activities (${esc(ACT.term_start_year || '2019')} declaration)</h3>${(m.outside_activities || []).length ? `<ul style="margin:0;padding-left:18px">${m.outside_activities.map(a => `<li class="small">${esc(a)}</li>`).join('')}</ul>` : '<div class="empty">None listed in the data.</div>'}</div>
   </div>`;
 }
 
@@ -556,15 +560,15 @@ function influencePage() {
   const coef = I.coef.filter(c => c.outcome === 'reached_law').sort((a, b) => a.odds_ratio_per_sd - b.odds_ratio_per_sd);
   const ee = M.echo_effect, eeLaw = ee['reached_law (insertions)'];
   app.innerHTML = `<h1>Pre-bill vs bill</h1>
-  <p class="lead">Two moments to influence a law: <b>before the bill</b>, when the Commission drafts it (2020 inception consultation → 2021 proposal), and
-    <b>on the bill</b>, when Parliament amends it (2021 comments → 2022 committee amendments → 2023 report → 2024 law).</p>
+  <p class="lead">Two moments to influence a law: <b>before the bill</b>, when the Commission drafts it (${esc(ACT.track_a_year || '2020')} inception consultation → ${esc(ACT.proposal_year || '2021')} proposal), and
+    <b>on the bill</b>, when Parliament amends it (${esc(ACT.track_b_year || '2021')} comments → ${esc(ACT.amendment_year || '2022')} committee amendments → ${esc(ACT.report_year || '2023')} report → ${esc(ACT.final_year || '2024')} law).</p>
   ${toc([['both', 'Pre-bill & bill'], ['issues', 'Pre-bill issues'], ['model', 'Reach model'], ['access', 'Access & money']])}
   <div class="grid g2" id="sec-both">
     <div class="card"><h3>Pre-bill · did the proposal take their side?</h3>
-      <div class="grid g2" style="gap:10px">${stat(pct(all?.aligned_share, 0), 'of 2020 positions adopted', 'random pick would give ' + pct(all?.random_choice_baseline, 0))}
-        ${stat(pct(I.echoed_a.in_law / Math.max(1, I.echoed_a.provisions), 0), 'of proposal text echoing 2020 comments survived to the law', 'vs ' + pct(I.became.in_law / Math.max(1, I.became.provisions), 0) + ' of all proposal text')}</div>
+      <div class="grid g2" style="gap:10px">${stat(pct(all?.aligned_share, 0), 'of ' + (ACT.track_a_year || '2020') + ' positions adopted', 'random pick would give ' + pct(all?.random_choice_baseline, 0))}
+        ${stat(pct(I.echoed_a.in_law / Math.max(1, I.echoed_a.provisions), 0), 'of proposal text echoing ' + (ACT.track_a_year || '2020') + ' comments survived to the law', 'vs ' + pct(I.became.in_law / Math.max(1, I.became.provisions), 0) + ' of all proposal text')}</div>
       <div id="p_align" class="plot" style="height:260px"></div>
-      <p class="muted small">Positions coded by an LLM from each 2020 comment on ${I.issues.length} issues; the proposal's own choice coded from its text by three models (majority).
+      <p class="muted small">Positions coded by an LLM from each ${esc(ACT.track_a_year || '2020')} comment on ${I.issues.length} issues; the proposal's own choice coded from its text by three models (majority).
       Bands = range expected if positions were shuffled between organisations.</p></div>
     <div class="card"><h3>Bill · do echoed amendments go further?</h3>
       <div class="grid g2" style="gap:10px">${stat(pct(ee.survived.echoed, 1), 'of echoed amendments survived', 'vs ' + pct(ee.survived.not_echoed, 1) + ' of the rest')}
@@ -580,17 +584,19 @@ function influencePage() {
     <div><p>A logistic model trained on all ${num(M.reached_law.n)} amendments that insert wording, using only what is known when the amendment is tabled plus whether it echoes lobby text.
       Cross-validated AUC <b>${M.reached_law.auc_cv.toFixed(2)}</b> (0.5 = coin flip); base rate ${pct(M.reached_law.base_rate, 1)}.</p>
       <div class="callout"><b>Reading it:</b> bars right of 1 raise the odds of reaching the law, bars left lower them (per standard deviation of the feature, with 95% bootstrap intervals).
-      Adding a new provision and amending the definitions (Art 3) help; long insertions, the ID group and ENVI amendments rarely make it.
+      ${ACT.is_default
+        ? 'Adding a new provision and amending the definitions (Art 3) help; long insertions, the ID group and ENVI amendments rarely make it.'
+        : 'Specific provisions and committees shift the odds substantially, while long insertions rarely make it.'}
       Echoing lobby text in itself barely moves the odds — what matters is <i>what</i> is amended and <i>by whom</i>.</div>
       <p class="muted small mt">This probability is shown for every amendment in the story and lobby pages, with the features that pushed it up or down.</p></div></div></div>
   <div class="grid g2 mt" id="sec-access">
     <div class="card"><h3>Access: did they meet the MEPs who carried their text?</h3><table><thead><tr><th>Type</th><th class="r">Echoed pairs</th><th class="r">Met</th><th class="r">Random MEPs</th></tr></thead><tbody>
       ${I.access.map(r => `<tr><td>${r.user_type === 'ALL' ? '<b>All</b>' : tdot(r.user_type) + tname(r.user_type)}</td><td class="r">${r.echoed_pairs}</td><td class="r"><b>${pct(r.carrier_met_share)}</b></td>
       <td class="r">${pct(r.random_tablers_mean)} <span class="muted small">(${pct(r.random_ci_low, 0)}–${pct(r.random_ci_high, 0)})</span></td></tr>`).join('')}</tbody></table>
-      <p class="muted small">Recorded meetings cover 2020 and Jun–Oct 2024 only, so "not met" means "not recorded".</p></div>
+      <p class="muted small">${ACT.is_default ? 'Recorded meetings cover 2020 and Jun–Oct 2024 only, so "not met" means "not recorded".' : 'Recorded meetings cover limited periods only, so "not met" means "not recorded".'}</p></div>
     <div class="card"><h3>Money: does spending more buy influence?</h3><table><thead><tr><th>Measure</th><th class="r">n</th><th class="r">Spearman ρ</th><th class="r">95% CI</th></tr></thead><tbody>
       ${I.money.filter(r => r.user_type === 'ALL' && r.sample === 'all matches').map(r => `<tr><td>${esc(r.metric.replace(/_/g, ' '))}</td><td class="r">${r.n}</td><td class="r">${(+r.spearman_rho).toFixed(2)}</td><td class="r">${(+r.ci_low).toFixed(2)} – ${(+r.ci_high).toFixed(2)}</td></tr>`).join('')}</tbody></table>
-      <p class="muted small">Correlation between the influence score and 2026 register figures. Every interval includes 0: no measurable link.</p></div>
+      <p class="muted small">Correlation between the influence score and ${ACT.is_default ? '2026' : (ACT.register_year || 'register')} register figures. Every interval includes 0: no measurable link.</p></div>
   </div>`;
   Plotly.newPlot('p_align', [
     {type: 'bar', x: al.map(r => tname(r.user_type)), y: al.map(r => r.aligned_share), marker: {color: al.map(r => tcol(r.user_type))}, text: al.map(r => pct(r.aligned_share, 0)), textposition: 'outside', cliponaxis: false,
@@ -611,26 +617,26 @@ function methodPage() {
   app.innerHTML = `<h1>Method</h1><p class="lead">Everything on these pages is computed by the pipeline in this repository and stored in a Neo4j graph.</p>
   <div class="grid g2">
     <div class="card"><h3>Sources</h3><div class="kv">
-      <div>Comments</div><div>Have Your Say: ${num(D.counts.nodes.Comment)} contributions (2020 inception impact assessment, 2021 proposal)</div>
-      <div>Legal texts</div><div>EUR-Lex via CELLAR: proposal COM(2021)206 and ${esc(ACT.law)} (as adopted + 2026 consolidation)</div>
+      <div>Comments</div><div>Have Your Say: ${num(D.counts.nodes.Comment)} contributions (${esc(ACT.consultation_sources || (ACT.track_a_label + ', ' + (ACT.is_default ? '2021 proposal' : ACT.track_b_label)))})</div>
+      <div>Legal texts</div><div>EUR-Lex via CELLAR: proposal ${esc(ACT.proposal_ref || 'COM(2021)206')} and ${esc(ACT.law)}${ACT.consolidated_label || ''}</div>
       <div>Amendments</div><div>ParlTrack: ${num(D.counts.nodes.Amendment)} committee amendments, ${num(D.counts.nodes.AdoptedAmendment)} report amendments, MEP records</div>
-      <div>Lobby register</div><div>LobbyFacts and Integrity Watch EU (2026 snapshot)</div>
-      <div>Meetings</div><div>Integrity Watch MEP meetings (2020 and Jun–Oct 2024 only)</div></div></div>
+      <div>Lobby register</div><div>LobbyFacts and Integrity Watch EU${ACT.is_default ? ' (2026 snapshot)' : (ACT.register_year ? ' (' + esc(ACT.register_year) + ' snapshot)' : '')}</div>
+      <div>Meetings</div><div>Integrity Watch MEP meetings${ACT.is_default ? ' (2020 and Jun–Oct 2024 only)' : ''}</div></div></div>
     <div class="card"><h3>Steps</h3><ol class="small" style="margin:0;padding-left:18px;line-height:1.7">
       <li>Comments cut into ~130-word paragraphs; legal texts parsed into articles, paragraphs and points.</li>
       <li>Each paragraph compared with proposal provisions (pre-bill) and with the words each amendment inserts (bill): embeddings (${esc(D.models.embed)}), TF-IDF and shared phrases, with proposal quotes and widely shared quotes masked.</li>
-      <li>Threshold = 99th percentile of the same comparisons against an unrelated act (the DSA): ${(+(t.s08?.A?.tau_match || 0)).toFixed(2)} (pre-bill), ${(+(t.s08?.B?.tau_match || 0)).toFixed(2)} (bill).</li>
-      <li>An AI judge (${esc(D.models.judge)}) rates each match: implements, partial, contradicts or unrelated. Tiers: T1 verbatim + implements, T2 verbatim or implements/partial.</li>
+      <li>Threshold = 99th percentile of the same comparisons against an unrelated act (${esc(ACT.null_short_label || 'the DSA')}): ${(+(t.s08?.A?.tau_match || 0)).toFixed(2)} (pre-bill), ${(+(t.s08?.B?.tau_match || 0)).toFixed(2)} (bill).</li>
+      <li>An AI judge (${esc(D.models.judge)}) rates each match: implements, partial, contradicts or unrelated. Tiers: T1 verbatim + implements, T2 implements, or verbatim + partial (partial alone is mostly noise: the judge gives it to about a third of matches with an unrelated act).</li>
       <li>Amendments followed to the EP report (survival) and the final law (inserted words kept), with null-calibrated thresholds.</li>
       <li>Reach model: logistic regression for P(survive) and P(reach the law) with cross-validation and bootstrap intervals.</li>
-      <li>Evaluation: cross-model agreement κ=${(+(D.eval?.cross_model_kappa_B || 0)).toFixed(2)} (Track B); null false-positive rate ${(+(D.eval?.null_false_positive_rate || 0) * 100).toFixed(1)}%.</li></ol></div>
+      <li>Evaluation: cross-model agreement κ=${(+(D.eval?.cross_model_kappa_B || 0)).toFixed(2)} (Track B); null false-positive rate ${D.eval?.null_false_positive_rate == null || isNaN(+D.eval.null_false_positive_rate) ? 'not measured' : (+D.eval.null_false_positive_rate * 100).toFixed(1) + '%'}.</li></ol></div>
   </div>
   <div class="card mt"><h3>Caveats</h3><ul class="small" style="margin:0;padding-left:18px;line-height:1.7">
-    <li>Similar wording is not proof of influence: shared outside sources (the HLEG guidelines, the OECD definition, the White Paper) and coalition texts produce echoes too.</li>
-    <li>Register figures (spend, staff, passes, meetings) are today's, not 2021's. Unmatched organisations have no spend, never zero.</li>
-    <li>Meeting records cover 2020 and June–October 2024 only; nothing covers the 2022–2023 amendment period.</li>
+    <li>Similar wording is not proof of influence: shared outside sources${ACT.shared_sources ? ' (' + esc(ACT.shared_sources) + ')' : ''} and coalition texts produce echoes too.</li>
+    <li>Register figures (spend, staff, passes, meetings) are today's${ACT.proposal_year ? ", not " + esc(ACT.proposal_year) + "'s" : ''}. Unmatched organisations have no spend, never zero.</li>
+    <li>${esc(ACT.meeting_caveat || "Meeting records cover 2020 and June–October 2024 only; nothing covers the 2022–2023 amendment period.")}</li>
     <li>Only ${num(Object.values(D.lobbies).filter(o => o.match_method !== 'none').length)} of ${num(LOBBIES.length)} organisations could be matched to the register automatically.</li>
-    <li>The AI judge saw ${num((D.thresholds.s08?.B?.echoes) ? 2000 : 0)} of the bill-stage matches (the strongest); the rest stay at tier T3.</li></ul></div>
+    <li>The AI judge saw ${num(Math.min(ACT.judge_cap || 2000, D.thresholds.s08?.B?.echoes || 0))} of the bill-stage matches (the strongest); the rest stay at tier T3.</li></ul></div>
   <p class="footer">Built from the hackathonReversa pipeline · ${esc(ACT.id)}</p>`;
 }
 function notFound() { app.innerHTML = '<h1>Not found</h1><p><a href="#/">Back to the overview</a></p>'; }
@@ -647,12 +653,12 @@ function articlesPage() {
   app.innerHTML = `<h1>Articles</h1>
   <p class="lead">Every article, annex and recital of the Commission's proposal. Open one to see a graph of the public comments whose wording is closest to it,
     the amendments it drew and how many reached the law.</p>
-  <div class="controls"><input type="search" id="aq" placeholder="Filter: “Article 5”, “biometric”, “sandbox”…" value="${esc(AQ)}" style="flex:1 1 260px">
+  <div class="controls"><input type="search" id="aq" placeholder="${esc(ACT.filter_placeholder || 'Filter: “Article 5”, “biometric”, “sandbox”…')}" value="${esc(AQ)}" style="flex:1 1 260px">
     <div class="seg" id="akind">${[['', 'All'], ['article', 'Articles'], ['annex', 'Annexes'], ['recital', 'Recitals']].map(([k, l]) => `<button data-k="${k}" class="${k === AKIND ? 'on' : ''}">${l}</button>`).join('')}</div>
     <select id="asort">${[['doc', 'Document order'], ['n_am', 'Most amendments'], ['n_law', 'Most amendments in the law'], ['n_echo', 'Most judged echoes'], ['top', 'Closest comment']]
       .map(([k, l]) => `<option value="${k}" ${k === ASORT ? 'selected' : ''}>${l}</option>`).join('')}</select><span class="muted small" id="acount"></span></div>
   <div id="agrid"></div>
-  <p class="muted small">Coloured bar = how many committee amendments the provision drew. Echoes = closest comment paragraphs the AI judge rated “implements” or “partial”.</p>`;
+  <p class="muted small">Coloured bar = how many committee amendments the provision drew. Echoes = closest comment paragraphs the AI judge rated “implements” (or “partial” with a verbatim run).</p>`;
   const topSim = a => Math.max(a.B[0]?.[1] || 0, a.A[0]?.[1] || 0);
   const draw = () => {
     const q = AQ.toLowerCase().replace(/\bart(icle)?\.?\s*(\d+)/g, 'article $2');
@@ -693,34 +699,34 @@ function articlePage(id) {
   ${toc([['graph', 'Similar comments'], ['list', 'Ranked list'], ['text', 'Proposal text'], ['stories', `Stories (${sts.length})`]])}
   <span class="badge">${KIND[a.kind]}</span>
   <h1 style="margin-top:8px">${esc(a.label)}${a.title ? ' · ' + esc(a.title) : ''}</h1>
-  <p class="lead">The public comments whose paragraphs are closest in meaning to this ${a.kind}: 2021 comments compared with the wording Parliament's committees tried to
-    insert here, 2020 comments with the proposal's own text.</p>
+  <p class="lead">The public comments whose paragraphs are closest in meaning to this ${a.kind}: ${esc(ACT.track_b_year || '2021')} comments compared with the wording Parliament's committees tried to
+    insert here, ${esc(ACT.track_a_year || '2020')} comments with the proposal's own text.</p>
   <div class="grid g4">${stat(a.n_am, 'committee amendments', 'tabled on this ' + a.kind)}
     ${stat(a.n_survived, 'survived into the EP report', a.n_am ? pct(a.n_survived / a.n_am, 0) + ' vs ' + pct(BASE.amendment_share_survived, 0) + ' overall' : '')}
     ${stat(a.n_law, 'reached the final law', a.n_am ? pct(a.n_law / a.n_am, 1) + ' vs ' + pct(BASE.amendment_share_reached_law, 1) + ' overall' : '')}
-    ${stat(a.n_echo, 'judged echoes among the closest', 'AI judge: implements or partial')}</div>
+    ${stat(a.n_echo, 'judged echoes among the closest', 'AI judge: implements, or partial + verbatim')}</div>
   <div class="grid g-side mt" id="sec-graph" style="grid-template-columns:minmax(0,1fr) 400px">
     <div class="card"><h3>Top <span id="aktitle">${AK}</span> most similar comments</h3>
       <div class="controls">
         <div class="slider"><span>K</span><input type="range" id="ak" min="3" max="40" value="${AK}"><b id="akv">${AK}</b></div>
-        <div class="seg" id="atrack">${[['both', 'Both'], ['B', '2021 · bill'], ['A', '2020 · pre-bill']].map(([k, l]) =>
+        <div class="seg" id="atrack">${[['both', 'Both'], ['B', (ACT.track_b_year || '2021') + ' · bill'], ['A', (ACT.track_a_year || '2020') + ' · pre-bill']].map(([k, l]) =>
           `<button data-k="${k}" class="${k === ATRACK ? 'on' : ''}" ${(k === 'A' && !hasA) || (k === 'B' && !hasB) ? 'disabled title="no comments"' : ''}>${l}</button>`).join('')}</div>
       </div>
       <div class="controls" style="margin-top:-4px"><label class="chk"><input type="checkbox" id="adedup" ${ADEDUP ? 'checked' : ''}>one paragraph per comment</label>
         <label class="chk"><input type="checkbox" id="adups" ${ADUPS ? 'checked' : ''}>link near-identical paragraphs</label></div>
       <div id="agraph" style="height:560px"></div>
       <div class="legend">${Object.keys(TYPES).map(t => `<span><span class="tdot" style="background:${tcol(t)};margin:0"></span>${tname(t)}</span>`).join('')}</div>
-      <div class="legend"><span><span class="sym c"></span>2021 comment</span><span><span class="sym d"></span>2020 comment</span><span><span class="sym r"></span>judged echo</span>
+      <div class="legend"><span><span class="sym c"></span>${esc(ACT.track_b_year || '2021')} comment</span><span><span class="sym d"></span>${esc(ACT.track_a_year || '2020')} comment</span><span><span class="sym r"></span>judged echo</span>
         <span style="color:var(--accent)">- - - near-identical text</span></div>
-      <p class="muted small">Closer to the centre = more similar (cosine similarity of text embeddings, ${esc(D.models.embed)}). 2021 comments are scored against the words committee amendments
-        insert into this ${a.kind}, 2020 comments against the proposal's text, so the two scales differ a little. Click a dot for the paragraph and the text it resembles.</p>
+      <p class="muted small">Closer to the centre = more similar (cosine similarity of text embeddings, ${esc(D.models.embed)}). ${esc(ACT.track_b_year || '2021')} comments are scored against the words committee amendments
+        insert into this ${a.kind}, ${esc(ACT.track_a_year || '2020')} comments against the proposal's text, so the two scales differ a little. Click a dot for the paragraph and the text it resembles.</p>
     </div>
     <div class="card" id="adetail" style="align-self:start;position:sticky;top:calc(var(--hh, 56px) + 60px);max-height:calc(100vh - var(--hh, 56px) - 80px);overflow:auto"></div>
   </div>
   <div class="card mt" id="sec-list" style="overflow:auto"><h3>Ranked list</h3><table><thead><tr><th>#</th><th>Organisation</th><th>Comment</th><th class="r">Similarity</th><th>Closest text</th><th>AI judge</th></tr></thead>
     <tbody id="alist"></tbody></table></div>
   <div class="grid g2 mt">
-    <div class="card" id="sec-text"><h3>Proposal text (Commission, April 2021)</h3>${a.text ? `<div class="textbox" style="white-space:pre-wrap;max-height:420px;overflow:auto">${esc(a.text)}${a.text.length >= 900 ? '…' : ''}</div>` : '<div class="empty">Not available.</div>'}</div>
+    <div class="card" id="sec-text"><h3>Proposal text (Commission, ${esc(ACT.proposal_month_year || 'April 2021')})</h3>${a.text ? `<div class="textbox" style="white-space:pre-wrap;max-height:420px;overflow:auto">${esc(a.text)}${a.text.length >= 900 ? '…' : ''}</div>` : '<div class="empty">Not available.</div>'}</div>
     <div class="card" id="sec-stories"><h3>Stories on this ${a.kind}</h3>${sts.length ? sts.slice(0, 14).map(([s, k]) => `<div class="small" style="margin:7px 0">${tdot(s.type)}<a href="#/story/${k}">${esc(s.org_name)} → ${esc(s.location)}</a>
       ${s.law ? '<span class="badge good">in law</span>' : s.survived ? '<span class="badge">EP report</span>' : '<span class="badge bad">dropped</span>'}</div>`).join('')
       + (sts.length > 14 ? `<div class="muted small">+${sts.length - 14} more in <a href="#/stories">Stories</a></div>` : '')
@@ -739,7 +745,7 @@ function drawArticle() {
   const tgt = r => r.t === 'A' ? 'proposal ' + r.tid : (D.art_targets[r.tid]?.loc || '') + ' · ' + r.tid;
   alist.innerHTML = AITEMS.map((r, k) => `<tr class="click" data-k="${k}" onclick="selectItem(${k})"><td class="muted">${k + 1}</td>
     <td>${tdot(r.c.type)}<b>${esc(r.c.name)}</b><div class="muted small">${tname(r.c.type)}</div></td>
-    <td class="small">${r.t === 'A' ? '2020 inception' : '2021 proposal'}<div class="muted">${esc(r.c.date || '')}</div></td>
+    <td class="small">${r.t === 'A' ? (ACT.track_a_year ? ACT.track_a_year + ' inception' : '2020 inception') : (ACT.track_b_year ? ACT.track_b_year + ' proposal' : '2021 proposal')}<div class="muted">${esc(r.c.date || '')}</div></td>
     <td class="r"><b>${r.sim.toFixed(3)}</b></td><td class="small">${esc(trunc(tgt(r), 70))}</td>
     <td class="small">${r.rel ? `<span class="badge ${isEcho(r) ? 'good' : ''}">${esc(r.rel)}</span> <span class="muted">${esc(r.tier || '')}</span>` : '<span class="muted">not judged</span>'}</td></tr>`).join('')
     || '<tr><td colspan="6" class="empty">No comments.</td></tr>';
@@ -771,7 +777,7 @@ function artGraph() {
     traces.push({type: 'scatter', mode: 'markers+text', customdata: g.map(([, k]) => k), x: g.map(([r]) => r.x), y: g.map(([r]) => r.y),
       text: g.map(([r, k]) => k < nlab ? trunc(r.c.name, 24) : ''), textposition: g.map(([r]) => r.y < 0 ? 'bottom center' : 'top center'),
       textfont: {size: 10.5, color: css('--text-2')}, cliponaxis: false,
-      hovertext: g.map(([r, k]) => `<b>${esc(r.c.name)}</b><br>#${k + 1} · ${r.t === 'A' ? '2020 comment' : '2021 comment'} · cos ${r.sim.toFixed(3)}${r.rel ? '<br>AI judge: ' + esc(r.rel) : ''}`),
+      hovertext: g.map(([r, k]) => `<b>${esc(r.c.name)}</b><br>#${k + 1} · ${r.t === 'A' ? (ACT.track_a_year ? ACT.track_a_year + ' comment' : '2020 comment') : (ACT.track_b_year ? ACT.track_b_year + ' comment' : '2021 comment')} · cos ${r.sim.toFixed(3)}${r.rel ? '<br>AI judge: ' + esc(r.rel) : ''}`),
       hovertemplate: '%{hovertext}<extra></extra>',
       marker: {color: tcol(t), symbol: g.map(([r]) => r.t === 'A' ? 'diamond' : 'circle'), size: g.map(([r]) => 13 + 13 * (r.sim - mn) / span), opacity: 0.95,
         line: {color: g.map(([r]) => isEcho(r) ? css('--text') : css('--surface')), width: g.map(([r]) => isEcho(r) ? 2.6 : 1.2)}}});
@@ -815,7 +821,7 @@ function artDetail() {
       <span class="small"><a onclick="selectItem(${ASEL > 0 ? ASEL - 1 : 0})" style="cursor:pointer">‹</a> <span class="muted">#${ASEL + 1} of ${items.length}</span>
       <a onclick="selectItem(${Math.min(items.length - 1, ASEL + 1)})" style="cursor:pointer">›</a> · <a onclick="selectItem(null)" style="cursor:pointer">close</a></span></div>
     <h2 style="margin:8px 0 2px">${name}</h2>
-    <div class="muted small">${r.t === 'A' ? '2020 inception comment' : '2021 comment on the proposal'} · ${esc(r.c.date || '')}${r.c.url ? ` · <a href="${esc(r.c.url)}" target="_blank" rel="noopener">full comment ↗</a>` : ''}</div>
+    <div class="muted small">${r.t === 'A' ? (ACT.track_a_comment_title || '2020 inception comment') : (ACT.track_b_comment_title || '2021 comment on the proposal')} · ${esc(r.c.date || '')}${r.c.url ? ` · <a href="${esc(r.c.url)}" target="_blank" rel="noopener">full comment ↗</a>` : ''}</div>
     <div class="grid g2 mt" style="gap:10px"><div><div class="bignum">${r.sim.toFixed(3)}</div><div class="muted small">cosine similarity</div></div>
       <div><div style="font-weight:650;font-size:16px;margin-top:6px;${isEcho(r) ? 'color:var(--good)' : ''}">${r.rel ? esc(r.rel) : 'not judged'}</div>
       <div class="muted small">AI judge${r.tier ? ' · tier ' + esc(r.tier) : ' (below the review cut)'}</div></div></div>

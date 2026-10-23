@@ -19,9 +19,12 @@ import pandas as pd
 from . import config, graph
 from .units import location_to_unit, resolve
 
+PROCEDURE_AWARE = True  # opted in to multi-procedure runs via config.PROC
+
 log = logging.getLogger("s03")
 SOURCE = "s03_amendments"
-TERM_START, TERM_END = "2019-07-02", "2024-07-15"  # 9th parliamentary term
+TERM_START, TERM_END = config.PROC["parliament"]["term"]
+COUNTRY_DATE = config.PROC["parliament"]["country_date"]
 
 
 def _dashboard():
@@ -31,10 +34,11 @@ def _dashboard():
     return mod
 
 
-def _country_at(mep: dict, date: str) -> str | None:
-    for c in mep.get("Constituencies") or []:
-        if c and c.get("start", "") <= date <= c.get("end", "9999"):
-            return c.get("country")
+def _country_at(mep: dict, date: str | None) -> str | None:
+    if date:
+        for c in mep.get("Constituencies") or []:
+            if c and c.get("start", "") <= date <= c.get("end", "9999"):
+                return c.get("country")
     cs = [c for c in mep.get("Constituencies") or [] if c]
     return cs[-1].get("country") if cs else None
 
@@ -72,7 +76,7 @@ def build() -> dict[str, pd.DataFrame]:
     for mid in mep_ids:
         m = meps.get(mid, {})
         name = (m.get("Name") or {}).get("full") or str(mid)
-        mep_rows.append(dict(mep_id=int(mid), name=name, country=_country_at(m, "2022-06-01") if m else None,
+        mep_rows.append(dict(mep_id=int(mid), name=name, country=_country_at(m, COUNTRY_DATE) if m else None,
                              in_mep_dump=bool(m)))
         for g in m.get("Groups") or []:
             gid = g.get("groupid") or "NA"

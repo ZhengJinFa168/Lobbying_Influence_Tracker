@@ -27,6 +27,8 @@ from rapidfuzz import fuzz, process
 from . import config, graph, sources
 from .textutil import ascii_fold, normalise_name
 
+PROCEDURE_AWARE = True  # no procedure-specific inputs: organisations, registers and graph queries are generic
+
 log = logging.getLogger("s06")
 SOURCE = "s06_orgs"
 
