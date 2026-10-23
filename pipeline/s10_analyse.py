@@ -84,6 +84,8 @@ def money_vs_influence(orgs: pd.DataFrame) -> pd.DataFrame:
 def track_a_alignment(pos: pd.DataFrame, n_perm: int = 1000) -> pd.DataFrame:
     from .s09_judge_and_stance import ISSUES
 
+    if pos.empty or "aligned" not in pos.columns:  # no Track A codebook for this procedure: no positions
+        return pd.DataFrame()
     k = {i["issue_id"]: len(i["choices"]) for i in ISSUES}
     p = pos[pos.aligned.notna()].copy()
     p["aligned"] = p.aligned.astype(bool)
