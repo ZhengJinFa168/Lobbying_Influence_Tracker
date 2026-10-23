@@ -10,13 +10,13 @@ Judge
   'unrelated' pairs stay in the graph with hidden = true.
 
 Track A stance
-- Issue codebook below (policy options of the inception impact assessment plus the recurring questions).
-- Each 13340 comment is coded on every issue in one call per part (parts of <= ~4,500 words); a stance found
+- Issue codebook loaded from config (policy options of the inception impact assessment plus the recurring questions).
+- Each Track A consultation comment is coded on every issue in one call per part (parts of <= ~4,500 words); a stance found
   in any part counts, conflicting parts become 'mixed'.
 - Issue.proposal_choice is coded from the proposal text of the issue's articles (Provision nodes) by three
   models (LLM_MODEL, LLM_MODEL_SECOND, LLM_MODEL_HARD) and the majority is kept; disagreements are logged.
   (The plan's "3 seeded runs" give identical answers at temperature 0, and Anthropic endpoints ignore seeds,
-  so three model families are the meaningful repeat.) Liability is not in the AI Act: "not_addressed".
+  so three model families are the meaningful repeat.) Issues without proposal articles use the issue's outside_note: "not_addressed".
 - TOOK_POSITION {stance, quote, aligned}.
 
 Usage: python -m pipeline.run --only s09 [--track A|B]; env S09_LIMIT=n caps the judge pairs per track (dry runs).
@@ -30,9 +30,11 @@ from collections import Counter
 
 import numpy as np
 import pandas as pd
+import yaml
 
 from . import config, graph, llm
 
+PROCEDURE_AWARE = True  # reads wording, codebook and consultation feedback from config.PROC
 log = logging.getLogger("s09")
 SOURCE = "s09_judge_and_stance"
 F = config.FEATURES
@@ -50,6 +52,8 @@ JUDGE_SCHEMA = {
     "required": ["llm_relation", "llm_direction", "overlap_quote"],
     "additionalProperties": False,
 }
+_WORDING = config.PROC.get("wording", {}) if isinstance(config.PROC.get("wording"), dict) else {}
+_TOPIC = _WORDING.get("topic", "AI")
 JUDGE_PROMPT = """STAKEHOLDER PASSAGE (consultation submission):
 \"\"\"{chunk}\"\"\"
 
@@ -62,7 +66,7 @@ Questions:
    - "partial": it goes some of the way, or does one of several things asked
    - "contradicts": it does the opposite of what the passage asks
    - "unrelated": it addresses something else, or the overlap is only a shared topic or a common quotation
-2. llm_direction: compared with {baseline}, does the legislative text make the rules on AI stricter or more
+2. llm_direction: compared with {baseline}, does the legislative text make the rules on """ + _TOPIC + """ stricter or more
    protective ("strengthens"), looser or less burdensome ("weakens"), or neither ("neutral")?
 3. overlap_quote: the shortest quote (max 30 words) from the LEGISLATIVE TEXT that matches the passage;
    empty string if unrelated."""
@@ -70,10 +74,12 @@ Questions:
 
 def _target_block(track: str, row) -> tuple[str, str, str]:
     if track == "A":
-        return "a provision of the Commission's 2021 proposal", f"[{row.target_id}] {row.target_text}", \
+        target_kind = _WORDING.get("judge_target_A", "a provision of the Commission's 2021 proposal")
+        return target_kind, f"[{row.target_id}] {row.target_text}", \
             "the situation before this proposal"
     old = row.old_text if isinstance(row.old_text, str) and row.old_text else "(new provision)"
-    return ("a European Parliament committee amendment to the 2021 proposal",
+    target_kind = _WORDING.get("judge_target_B", "a European Parliament committee amendment to the 2021 proposal")
+    return (target_kind,
             f"Provision: {row.location}\nProposal text: {old}\nAmended text: {row.new_text}\n"
             f"Words the amendment inserts: {row.added_text}", "the Commission's proposal text")
 
@@ -143,34 +149,30 @@ def write_judgements(track: str, j: pd.DataFrame) -> None:
 
 
 # ---------------------------------------------------------------- Track A issues
-ISSUES = [
-    dict(issue_id="option", label="Preferred regulatory option (inception impact assessment)",
-         choices=["option0_baseline", "option1_soft_law", "option2_voluntary_labelling",
-                  "option3a_mandatory_specific_applications", "option3b_mandatory_high_risk",
-                  "option3c_mandatory_all_ai", "option4_combination"],
-         articles=["Art1", "Art6", "Art52", "Art69"]),
-    dict(issue_id="ai_definition", label="Scope of the AI definition",
-         choices=["narrow_definition", "broad_definition"], articles=["Art3", "AnnexI"]),
-    dict(issue_id="remote_biometric_id", label="Remote biometric identification in public spaces",
-         choices=["ban", "restrict_with_exceptions", "regulate_as_high_risk", "no_specific_rules"],
-         articles=["Art5"]),
-    dict(issue_id="conformity_assessment", label="Who checks high-risk AI before it reaches the market",
-         choices=["self_assessment", "third_party_assessment", "mixed"], articles=["Art43"]),
-    dict(issue_id="high_risk_list", label="How high-risk AI is defined",
-         choices=["closed_list", "open_or_updatable_list", "case_by_case_criteria"],
-         articles=["Art6", "Art7", "AnnexIII"]),
-    dict(issue_id="sandboxes", label="Regulatory sandboxes",
-         choices=["support_sandboxes", "oppose_sandboxes"], articles=["Art53", "Art54"]),
-    dict(issue_id="sme_relief", label="Relief for SMEs and start-ups",
-         choices=["support_relief", "oppose_relief"], articles=["Art55"]),
-    dict(issue_id="liability", label="Changes to liability rules for AI",
-         choices=["new_or_adapted_liability_rules", "no_change_to_liability_rules"], articles=[]),
-    dict(issue_id="enforcement", label="Enforcement and governance",
-         choices=["central_eu_body", "national_authorities", "existing_sectoral_authorities"],
-         articles=["Art56", "Art59", "Art63"]),
-    dict(issue_id="standards", label="Role of harmonised standards",
-         choices=["rely_on_standards", "detailed_rules_in_law"], articles=["Art40", "Art41"]),
-]
+def _load_codebook() -> tuple[list[dict], dict[str, str]]:
+    cb_rel = config.PROC.get("stance", {}).get("codebook") if isinstance(config.PROC.get("stance"), dict) else None
+    if not cb_rel:
+        return [], {}
+    p = config.ROOT / cb_rel
+    if not p.is_file():
+        return [], {}
+    data = yaml.safe_load(p.read_text(encoding="utf-8"))
+    raw_issues = data.get("issues", []) if isinstance(data, dict) else []
+    issues = []
+    outside_notes = {}
+    for item in raw_issues:
+        issues.append({
+            "issue_id": item["issue_id"],
+            "label": item["label"],
+            "choices": list(item["choices"]),
+            "articles": list(item["articles"]),
+        })
+        if "outside_note" in item:
+            outside_notes[item["issue_id"]] = item["outside_note"]
+    return issues, outside_notes
+
+
+ISSUES, _OUTSIDE_NOTES = _load_codebook()
 NA = "not_addressed"
 
 
@@ -188,8 +190,10 @@ def _codebook() -> str:
     return "\n".join(f"- {i['issue_id']}: {i['label']}. Choices: {', '.join(i['choices'])}, or {NA}." for i in ISSUES)
 
 
-STANCE_SYSTEM = ("You code the positions a stakeholder takes in a submission to the European Commission's 2020 "
-                 "consultation on an AI regulation (inception impact assessment). Code only positions the text states. "
+_STANCE_CONSULTATION = _WORDING.get("stance_consultation",
+                                    "the European Commission's 2020 consultation on an AI regulation (inception impact assessment)")
+STANCE_SYSTEM = ("You code the positions a stakeholder takes in a submission to "
+                 f"{_STANCE_CONSULTATION}. Code only positions the text states. "
                  "Answer with JSON matching the schema.")
 STANCE_PROMPT = """Codebook (one stance per issue; use "{na}" when the text takes no position):
 {codebook}
@@ -198,9 +202,10 @@ For each issue give the stance and a supporting quote of at most 30 words from t
 
 SUBMISSION TEXT (part {part} of {parts}):
 \"\"\"{text}\"\"\""""
+_PROPOSAL_PROMPT_TARGET = _WORDING.get("proposal_prompt", "the European Commission's 2021 AI Act proposal")
 PROPOSAL_PROMPT = """Codebook issue: {label}. Choices: {choices}.
 
-Below is the relevant text of the European Commission's 2021 AI Act proposal. Which choice does the proposal make?
+Below is the relevant text of """ + _PROPOSAL_PROMPT_TARGET + """. Which choice does the proposal make?
 Give the choice, the article you relied on, and a quote of at most 30 words.
 
 {text}"""
@@ -231,12 +236,15 @@ def code_comment(text: str) -> dict:
 
 
 def proposal_choices() -> pd.DataFrame:
+    if not ISSUES:
+        return pd.DataFrame(columns=["issue_id", "label", "proposal_choice", "article_ref", "proposal_quote", "votes", "agreement"])
     prov = pd.read_parquet(config.CACHE / "s02_proposal_units.parquet")
     rows = []
     for i in ISSUES:
         if not i["articles"]:
+            note = _OUTSIDE_NOTES.get(i["issue_id"], f"{i['issue_id']} is outside the {config.PROC.get('short', 'act')}")
             rows.append(dict(issue_id=i["issue_id"], label=i["label"], proposal_choice=NA, article_ref=None,
-                             proposal_quote=None, votes="liability is outside the AI Act", agreement=1.0))
+                             proposal_quote=None, votes=note, agreement=1.0))
             continue
         txt = "\n\n".join(f"[{a}] " + prov[prov.article == a].full_text.iloc[0][:6000]
                           for a in i["articles"] if (prov.article == a).any() and (prov.unit_id == a).any())
@@ -258,7 +266,13 @@ def proposal_choices() -> pd.DataFrame:
 
 def run_stance() -> tuple[pd.DataFrame, pd.DataFrame]:
     issues = proposal_choices()
-    recs = json.loads((config.ROOT / "WebScraping/feedback/stage1_inception_13340/parsed_feedback_stage1_13340.json").read_text())
+    if not ISSUES:
+        return issues, pd.DataFrame()
+    fb_rel = config.PROC.get("consultation", {}).get("A", {}).get("feedback") if isinstance(config.PROC.get("consultation"), dict) else None
+    if not fb_rel or not (config.ROOT / fb_rel).is_file():
+        log.info("Track A feedback file not found: %s", fb_rel)
+        return issues, pd.DataFrame()
+    recs = json.loads((config.ROOT / fb_rel).read_text(encoding="utf-8"))
     org_of = {r["fid"]: r["org"] for r in graph.run(
         "MATCH (o:Organisation)-[:SUBMITTED]->(c:Comment {track:'A'}) RETURN c.feedback_id AS fid, o.org_id AS org")}
     coded = llm.batch(recs, lambda r: code_comment(r.get("full_text") or ""))
@@ -288,6 +302,11 @@ def main(track: str | None = None) -> None:
         print(f"   judge {t}: {len(j)} pairs, {err} errors; relations {j.llm_relation.value_counts().to_dict()}; "
               f"tiers {j.tier.value_counts().to_dict()}")
     if track in (None, "A"):
+        cb_rel = config.PROC.get("stance", {}).get("codebook") if isinstance(config.PROC.get("stance"), dict) else None
+        cb_file = config.ROOT / cb_rel if cb_rel else None
+        if not cb_file or not cb_file.is_file() or not ISSUES:
+            log.info("Track A stance coding skipped: codebook not found (%s)", cb_rel)
+            return
         issues, pos = run_stance()
         issues.to_parquet(config.CACHE / "s09_issues.parquet", index=False)
         pos.to_parquet(config.CACHE / "s09_positions.parquet", index=False)

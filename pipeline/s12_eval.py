@@ -3,17 +3,18 @@
 Measures how much to trust the echoes:
 1. Cross-model agreement: re-judges a stratified sample of 200 pairs per track
    with LLM_MODEL_SECOND. Reports Cohen's kappa. Disagreements downgrade the tier.
-2. Null false-positive rate: judges comment ↔ DSA amendment pairs.
+2. Null false-positive rate: judges comment ↔ null-procedure amendment pairs.
 3. Verbatim sanity: checks if verbatim pairs are implements or partial.
 4. Stance stability: how often three models agreed on the proposal's choices.
 
-Outputs data/results/eval.csv and eval/labels.csv.
+Outputs data/results/eval.csv and eval/labels.csv (per procedure).
 """
 from __future__ import annotations
 
 import json
 import logging
 import random
+import re
 
 import numpy as np
 import pandas as pd
@@ -22,6 +23,7 @@ from sklearn.metrics import cohen_kappa_score
 from . import config, graph, llm
 from .s09_judge_and_stance import judge, proposal_choices, _parts, _codebook, _stance_schema, NA, STANCE_PROMPT, STANCE_SYSTEM
 
+PROCEDURE_AWARE = True  # null procedure and outputs derived from config
 log = logging.getLogger("s12")
 
 def _downgrade(tier: str) -> str:
@@ -87,9 +89,20 @@ def cross_model_agreement(track: str) -> tuple[float, float, int]:
     return kappa, acc, len(disagreements)
 
 def null_false_positive_rate() -> float:
-    """Judge comment <-> DSA amendment pairs. The share it calls implements is the false-positive rate."""
-    null_b = pd.read_parquet(config.CACHE / "s08_null_B.parquet")
-    th = json.loads((config.DATA / "s08_thresholds.json").read_text())["B"]["tau_match"]
+    """Judge comment <-> null-procedure amendment pairs. The share it calls implements is the false-positive rate."""
+    null_b_path = config.CACHE / "s08_null_B.parquet"
+    th_path = config.DATA / "s08_thresholds.json"
+    null_slug = re.sub(r"\W+", "_", config.NULL_PROCEDURE).strip("_")
+    null_targets_path = config.FEATURES / f"null_targets_{null_slug}.parquet"
+    if not null_targets_path.is_file() and (config.FEATURES / "null_dsa_targets.parquet").is_file():
+        null_targets_path = config.FEATURES / "null_dsa_targets.parquet"
+
+    if not null_b_path.is_file() or not th_path.is_file() or not null_targets_path.is_file():
+        log.warning("Null false-positive inputs not found, skipping null check.")
+        return 0.0
+
+    null_b = pd.read_parquet(null_b_path)
+    th = json.loads(th_path.read_text())["B"]["tau_match"]
     null_b = null_b[null_b.score >= th]
     
     if len(null_b) == 0:
@@ -97,12 +110,12 @@ def null_false_positive_rate() -> float:
         
     sample = null_b.head(min(200, len(null_b))).copy()
     chunks = pd.read_parquet(config.FEATURES / "B_chunks.parquet").set_index("id").text
-    targets = pd.read_parquet(config.FEATURES / "null_dsa_targets.parquet").set_index("id").text
+    targets = pd.read_parquet(null_targets_path).set_index("id").text
     
     sample["chunk_text"] = sample.chunk_id.map(chunks)
     sample["added_text"] = sample.target_id.map(targets)
     
-    log.info(f"Null false-positive rate: judging {len(sample)} DSA pairs")
+    log.info(f"Null false-positive rate: judging {len(sample)} null pairs ({config.NULL_PROCEDURE})")
     res = llm.batch(list(sample.itertuples()), lambda r: judge("B", r))
     
     y_pred = [r.get("llm_relation", "unrelated") for r in res]
@@ -120,9 +133,11 @@ def verbatim_sanity(track: str) -> float:
 def stance_stability() -> tuple[float, float]:
     """How often the three models agreed on Track A proposal choices."""
     df = proposal_choices()
+    if len(df) == 0:
+        return 0.0, 0.0
     unanimous = (df.agreement == 1.0).sum()
     total = len(df)
-    return unanimous / total if total else 0.0, df.agreement.mean()
+    return unanimous / total if total else 0.0, float(df.agreement.mean())
 
 def generate_labels_csv():
     """Optional eval/labels.csv where a person labels 30 pairs."""
@@ -148,7 +163,8 @@ def generate_labels_csv():
             })
         
         config.EVAL.mkdir(exist_ok=True)
-        pd.DataFrame(out).to_csv(config.EVAL / "labels.csv", index=False)
+        labels_file = config.EVAL / ("labels.csv" if config.PROCEDURE_ID == config.DEFAULT_PROCEDURE else f"labels_{config.PROCEDURE_ID}.csv")
+        pd.DataFrame(out).to_csv(labels_file, index=False)
     except Exception as e:
         log.warning(f"Could not generate labels.csv: {e}")
 
