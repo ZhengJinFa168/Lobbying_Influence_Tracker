@@ -63,8 +63,7 @@ def build_stoplist() -> set[tuple]:
 def stoplist(track: str) -> set[tuple]:
     if track == "A":
         return set()
-    p = F / "stoplist_6grams.pkl"
-    return pickle.load(open(p, "rb")) if p.exists() else set()
+    return pickle.load(open(F / "stoplist_6grams.pkl", "rb"))
 
 
 def ngram_tokens(text, stop: set[tuple]) -> list[str | None]:

@@ -120,13 +120,15 @@ def main(track: str | None = None) -> None:
     Ge = embed(G.text.tolist())
     Gx = vec.transform(G.text.tolist()).tocsr()
     thresholds = {}
-    del_match = "MATCH ()-[r:ECHOED_IN {track: $track}]->()" if track else "MATCH ()-[r:ECHOED_IN]->()"
-    graph.run(f"{del_match} CALL {{ WITH r DELETE r }} IN TRANSACTIONS OF 10000 ROWS",
-              **({"track": track} if track else {}))
     available_tracks = [t for t in ("A", "B") if t in config.PUB_IDS and t in stats]
     if not available_tracks:
         available_tracks = [t for t in ("A", "B") if t in stats]
+    if track and track not in available_tracks:
+        raise SystemExit(f"S08: track {track} has no S07 statistics for {config.PROCEDURE_ID}")
     tracks = [track] if track else available_tracks
+    del_match = "MATCH ()-[r:ECHOED_IN {track: $track}]->()" if track else "MATCH ()-[r:ECHOED_IN]->()"
+    graph.run(f"{del_match} CALL {{ WITH r DELETE r }} IN TRANSACTIONS OF 10000 ROWS",
+              **({"track": track} if track else {}))
     null_all = {t: null_scores(t, G, Ge, Gx, stats[t], common) for t in available_tracks}
     for t in tracks:
         null = null_all[t]
@@ -167,9 +169,7 @@ def main(track: str | None = None) -> None:
               f"{shuffled_99:.2f}); null verbatim {int(null.verbatim.sum())} ({null.verbatim.mean():.3%}); "
               f"ECHOED_IN {len(echo):,} ({int(echo.verbatim.sum())} verbatim) from {echo.chunk_id.nunique():,} chunks")
     carrier_met()
-    p_th = config.DATA / "s08_thresholds.json"
-    old_th = json.loads(p_th.read_text()) if p_th.exists() else {}
-    p_th.write_text(json.dumps({**old_th, **thresholds}, indent=2))
+    (config.DATA / "s08_thresholds.json").write_text(json.dumps(thresholds, indent=2))
 
 
 if __name__ == "__main__":

@@ -151,8 +151,7 @@ def match_track(track: str, common: set[tuple]) -> tuple[pd.DataFrame, dict]:
                 for j in inv.get(g, ()):
                     cand.setdefault((i, j), set()).add("shared_6gram")
     if track == "B":
-        cited_path = config.CACHE / "s01_chunks_B.parquet"
-        cited = pd.read_parquet(cited_path).set_index("chunk_id").cited_articles if cited_path.exists() else {}
+        cited = pd.read_parquet(config.CACHE / "s01_chunks_B.parquet").set_index("chunk_id").cited_articles
         by_art: dict[str, list[int]] = {}
         for j, t in enumerate(G.target_unit_id):
             if isinstance(t, str):
