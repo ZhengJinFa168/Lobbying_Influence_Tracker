@@ -1,6 +1,6 @@
 """S01 Have Your Say feedback -> Organisation, Comment, Chunk, SUBMITTED, PART_OF, CITES.
 
-- Track A = publication 13340 (inception impact assessment), Track B = 14488 (proposal).
+- Track A = inception impact assessment, Track B = proposal feedback.
 - Text is re-chunked into paragraphs of ~80-150 words with a one-sentence overlap (matching targets);
   the parser's ~400-word chunks are kept in data/cache/context_chunks.parquet for LLM context.
 - Boilerplate (letterheads, addresses, contact lines, "welcomes the opportunity" openers) is stripped first.
@@ -11,6 +11,7 @@
 """
 from __future__ import annotations
 
+import json
 import logging
 import re
 from collections import Counter
@@ -21,11 +22,16 @@ from langdetect import DetectorFactory, detect
 from . import config, graph, sources
 from .textutil import clean_tr, n_words, normalise_name, sentences
 
+# Procedure-aware: reads consultation tracks, initiative URL, procedure references and size limits from config.PROC
+PROCEDURE_AWARE = True
+
 log = logging.getLogger("s01")
 DetectorFactory.seed = 0
 SOURCE = "s01_feedback"
-INITIATIVE_URL = ("https://ec.europa.eu/info/law/better-regulation/have-your-say/initiatives/"
-                  "12527-Artificial-intelligence-ethical-and-legal-requirements/F{id}_en")
+_initiative = config.PROC.get("consultation", {}).get("initiative", "")
+INITIATIVE_URL = (
+    f"https://ec.europa.eu/info/law/better-regulation/have-your-say/initiatives/{_initiative}/F{{id}}_en"
+)
 
 # ---------------------------------------------------------------- boilerplate
 _BOILER_LINE = re.compile(
@@ -125,14 +131,31 @@ def chunk_paragraphs(paras: list[str], lo: int = config.CHUNK_MIN_WORDS, hi: int
 
 
 # ---------------------------------------------------------------- citations
-_OTHER_LAW = re.compile(
-    r"^.{0,45}\b(GDPR|TFEU|TEU|Charter|Directive|2016/679|2019/1020|of Regulation \(EU\) 20(?!21/0106)|"
-    r"MDR|IVDR|DSA|DMA|Convention|ECHR|Treaty|LED)\b", re.I)
+_proc_m = re.match(r"^(\d{2})(\d{2}/\d+)", config.PROCEDURE)
+_own_ref = f"{_proc_m.group(1)}(?!{_proc_m.group(2)})" if _proc_m else "20(?!21/0106)"
+_short = (config.PROC.get("short") or "").strip()
+_other_laws = [
+    "GDPR", "TFEU", "TEU", "Charter", "Directive", "2016/679", "2019/1020",
+    f"of Regulation \\(EU\\) {_own_ref}",
+    "MDR", "IVDR", "DSA", "DMA", "Convention", "ECHR", "Treaty", "LED",
+]
+if _short:
+    _other_laws = [w for w in _other_laws if w.lower() != _short.lower()]
+_OTHER_LAW = re.compile(rf"^.{{0,45}}\b({'|'.join(_other_laws)})\b", re.I)
+
 _ART = re.compile(r"\bArt(?:icle)?s?\.?\s*((?:\d{1,3}(?:\s*\(\d+\))?(?:\s*\([a-z]\))?(?:\s*(?:,|and|&|to|-|–)\s*)?)+)", re.I)
 _ANNEX = re.compile(r"\bAnnex(?:es)?\s+((?:[IVX]{1,4}\b(?:\s*(?:,|and|&|-|–)\s*)?)+)")
 _REC = re.compile(r"\bRecitals?\s+((?:\d{1,3}(?:\s*(?:,|and|&|-|–)\s*)?)+)", re.I)
 ROMAN = {"I": 1, "II": 2, "III": 3, "IV": 4, "V": 5, "VI": 6, "VII": 7, "VIII": 8, "IX": 9}
-MAX_ART, MAX_ANNEX, MAX_REC = 85, 9, 89  # COM(2021)206 has 85 articles, 9 annexes, 89 recitals
+
+_size = (config.PROC.get("texts") or {}).get("proposal", {}).get("size")
+if _size:
+    MAX_ART: int | None = _size["articles"]
+    MAX_ANNEX: int | None = _size["annexes"]
+    MAX_REC: int | None = _size["recitals"]
+else:
+    MAX_ART = MAX_ANNEX = MAX_REC = None
+    log.info("proposal size not configured for %s; citation upper limits disabled", config.PROCEDURE_ID)
 
 
 def cited_units(text: str) -> list[str]:
@@ -141,19 +164,19 @@ def cited_units(text: str) -> list[str]:
         if _OTHER_LAW.match(text[m.end() : m.end() + 60]):
             continue
         for n in re.findall(r"(?<![(\d])(\d{1,3})(?![\d)])", m.group(1)):
-            if 1 <= int(n) <= MAX_ART:
+            if int(n) >= 1 and (MAX_ART is None or int(n) <= MAX_ART):
                 out.append(f"Art{int(n)}")
     for m in _ANNEX.finditer(text):
         if _OTHER_LAW.match(text[m.end() : m.end() + 60]):
             continue
         for r in re.findall(r"[IVX]{1,4}", m.group(1)):
-            if ROMAN.get(r, 99) <= MAX_ANNEX:
+            if MAX_ANNEX is None or ROMAN.get(r, 99) <= MAX_ANNEX:
                 out.append(f"Annex{r}")
     for m in _REC.finditer(text):
         if _OTHER_LAW.match(text[m.end() : m.end() + 60]):
             continue
         for n in re.findall(r"\d{1,3}", m.group(1)):
-            if 1 <= int(n) <= MAX_REC:
+            if int(n) >= 1 and (MAX_REC is None or int(n) <= MAX_REC):
                 out.append(f"Rec{int(n)}")
     return out
 
@@ -168,7 +191,13 @@ def _lang(text: str) -> str | None:
 # ---------------------------------------------------------------- build tables
 def build(track: str) -> dict[str, pd.DataFrame]:
     pub = config.PUB_IDS[track]
-    recs = sources.load(f"hys_feedback_{pub}")
+    feedback_rel = config.PROC["consultation"][track]["feedback"]
+    feedback_path = config.ROOT / feedback_rel
+    if not feedback_path.exists():
+        log.warning("feedback file not found: %s", feedback_path)
+        recs = []
+    else:
+        recs = json.loads(feedback_path.read_text(encoding="utf-8"))
     raw = {str(r["id"]): r for r in sources.raw_feedback(pub)}
     orgs, comments, chunks, ctx, cites = [], [], [], [], []
     stats = Counter()
@@ -235,7 +264,13 @@ def load_graph(t: dict[str, pd.DataFrame]) -> None:
 
 
 def main(track: str | None = None) -> None:
-    tracks = [track] if track else ["A", "B"]
+    if track is not None:
+        if track not in config.PUB_IDS:
+            log.warning("track %s has no publication in procedure %s, skipping", track, config.PROCEDURE_ID)
+            return
+        tracks = [track]
+    else:
+        tracks = [t for t in ["A", "B"] if t in config.PUB_IDS] + [t for t in sorted(config.PUB_IDS) if t not in ("A", "B")]
     for tr in tracks:
         t = build(tr)
         for name, df in t.items():
