@@ -12,7 +12,7 @@ Python statistics on top of the query results:
   a uniformly random choice per issue, and a permutation of stances within each issue (95% interval; per user
   type only, since a within-issue permutation leaves the overall share unchanged).
 - access_vs_echo.csv: share of echoed (organisation, amendment) pairs where a tabling MEP has a recorded
-  meeting with the organisation, against the same organisations paired with random AI Act tabling MEPs that
+  meeting with the organisation, against the same organisations paired with random tabling MEPs of the procedure that
   appear in the meetings data. Label: meetings recorded in 2020 and Jun-Oct 2024 only.
 """
 from __future__ import annotations
@@ -25,6 +25,8 @@ import pandas as pd
 from scipy.stats import spearmanr
 
 from . import config, graph
+
+PROCEDURE_AWARE = True  # no procedure-specific inputs: organisations, registers and graph queries are generic
 
 log = logging.getLogger("s10")
 RNG = np.random.default_rng(10)
