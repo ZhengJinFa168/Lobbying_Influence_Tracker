@@ -6,6 +6,8 @@ import logging
 import re
 from collections import Counter
 
+import pandas as pd
+
 from . import config, sources
 
 log = logging.getLogger("s00")
@@ -19,6 +21,10 @@ def warn(msg: str) -> None:
 
 def ok(msg: str) -> None:
     print(f"  ok    {msg}")
+
+
+def info(msg: str) -> None:
+    print(f"  info  {msg}")
 
 
 def check_manifest() -> None:
@@ -68,12 +74,24 @@ def check_parltrack() -> None:
     needle = json.dumps(config.PROCEDURE)
     n_comm = sum(1 for r in sources.iter_zst_json(sources.path("parltrack_amendments"), needle)
                  if r.get("reference") == config.PROCEDURE)
-    (ok if n_comm == 4852 else warn)(f"committee amendments for {config.PROCEDURE}: {n_comm} (plan expects 4,852)")
+    exp = config.PROC.get("expect") or {}
+    exp_comm = exp.get("committee_amendments")
+    if exp_comm is None:
+        info(f"committee amendments for {config.PROCEDURE}: {n_comm}")
+    else:
+        (ok if n_comm == exp_comm else warn)(f"committee amendments for {config.PROCEDURE}: {n_comm} (plan expects {exp_comm:,})")
     plen = [r for r in sources.iter_zst_json(sources.path("parltrack_plenary_amendments"), needle)
             if r.get("reference") == config.PROCEDURE]
-    n_rep = sum(1 for r in plen if str(r.get("id", "")).startswith("A9-0188/2023-"))
-    (ok if n_rep == 771 else warn)(f"plenary amendments for {config.PROCEDURE}: {len(plen)}, "
-                                   f"report amendments A9-0188/2023-*: {n_rep} (plan expects 771)")
+    rep_id = (config.PROC.get("parliament") or {}).get("report", {}).get("id", "")
+    rep_prefix = f"{rep_id}-"
+    n_rep = sum(1 for r in plen if str(r.get("id", "")).startswith(rep_prefix))
+    exp_rep = exp.get("report_amendments")
+    if exp_rep is None:
+        info(f"plenary amendments for {config.PROCEDURE}: {len(plen)}, "
+             f"report amendments {rep_prefix}*: {n_rep}")
+    else:
+        (ok if n_rep == exp_rep else warn)(f"plenary amendments for {config.PROCEDURE}: {len(plen)}, "
+                                       f"report amendments {rep_prefix}*: {n_rep} (plan expects {exp_rep:,})")
 
 
 def check_registers() -> None:
@@ -98,8 +116,12 @@ def check_registers() -> None:
 
 def check_eurlex() -> None:
     print("\n[EUR-Lex units]")
-    for name in ("eurlex_proposal", "eurlex_final_act_consolidated"):
-        df = sources.load(name)
+    base = config.ROOT / "data_sources" / "eurlex"
+    eurlex_dir = base if config.PROCEDURE_ID == config.DEFAULT_PROCEDURE else base / config.PROCEDURE_ID
+    for name, filename in [("eurlex_proposal", "proposal_units.csv"),
+                           ("eurlex_final_act_consolidated", "final_units.csv")]:
+        p = eurlex_dir / filename
+        df = pd.read_csv(p) if p.exists() else pd.DataFrame()
         (ok if len(df) else warn)(f"{name}: {len(df)} units" + ("" if len(df) else " (header-only; run S02)"))
 
 
