@@ -11,6 +11,7 @@ Outputs data/results/eval.csv and eval/labels.csv (per procedure).
 """
 from __future__ import annotations
 
+import importlib.util
 import json
 import logging
 import random
@@ -88,8 +89,20 @@ def cross_model_agreement(track: str) -> tuple[float, float, int]:
         
     return kappa, acc, len(disagreements)
 
-def null_false_positive_rate() -> float:
-    """Judge comment <-> null-procedure amendment pairs. The share it calls implements is the false-positive rate."""
+def _null_amendment_fields() -> pd.DataFrame:
+    """Location, old and new text of the null procedure's committee amendments, built like S03 builds them, so a
+    null pair is shown to the judge exactly as a real Track B pair is."""
+    spec = importlib.util.spec_from_file_location("build_dashboard", config.ROOT / "amendments" / "build_dashboard.py")
+    bd = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(bd)
+    df = bd.build_frame(bd.load_amendments(config.ROOT / "amendments", config.NULL_PROCEDURE), {})
+    return df.set_index("id")[["location", "old", "new"]].rename(columns={"old": "old_text", "new": "new_text"})
+
+
+def null_false_positive_rate() -> dict:
+    """Judge comment <-> null-procedure amendment pairs above tau_match. The share the judge calls implements is the
+    false-positive rate; implements-or-partial is also reported because either gives an echo tier T2. Failed calls
+    are counted separately and left out of the rates."""
     null_b_path = config.CACHE / "s08_null_B.parquet"
     th_path = config.DATA / "s08_thresholds.json"
     null_slug = re.sub(r"\W+", "_", config.NULL_PROCEDURE).strip("_")
@@ -99,28 +112,35 @@ def null_false_positive_rate() -> float:
 
     if not null_b_path.is_file() or not th_path.is_file() or not null_targets_path.is_file():
         log.warning("Null false-positive inputs not found, skipping null check.")
-        return float("nan")  # not measured: never report a fabricated 0.0
+        return {"null_false_positive_rate": float("nan")}  # not measured: never report a fabricated 0.0
 
     null_b = pd.read_parquet(null_b_path)
     th = json.loads(th_path.read_text())["B"]["tau_match"]
     null_b = null_b[null_b.score >= th]
     
     if len(null_b) == 0:
-        return 0.0
-        
+        return {"null_false_positive_rate": 0.0, "null_fp_judged": 0}
+
     sample = null_b.head(min(200, len(null_b))).copy()
     chunks = pd.read_parquet(config.FEATURES / "B_chunks.parquet").set_index("id").text
     targets = pd.read_parquet(null_targets_path).set_index("id").text
     
     sample["chunk_text"] = sample.chunk_id.map(chunks)
     sample["added_text"] = sample.target_id.map(targets)
-    
+    sample = sample.join(_null_amendment_fields(), on="target_id")
+
     log.info(f"Null false-positive rate: judging {len(sample)} null pairs ({config.NULL_PROCEDURE})")
     res = llm.batch(list(sample.itertuples()), lambda r: judge("B", r))
     
-    y_pred = [r.get("llm_relation", "unrelated") for r in res]
-    fpr = np.mean([p == "implements" for p in y_pred])
-    return fpr
+    ok = [r["llm_relation"] for r in res if isinstance(r, dict) and r.get("llm_relation")]
+    errors = len(res) - len(ok)
+    if errors:
+        log.warning("null check: %d of %d judge calls failed; left out of the rate", errors, len(res))
+    if not ok:
+        return {"null_false_positive_rate": float("nan"), "null_fp_judged": 0, "null_fp_errors": errors}
+    return {"null_false_positive_rate": float(np.mean([p == "implements" for p in ok])),
+            "null_fp_implements_or_partial": float(np.mean([p in ("implements", "partial") for p in ok])),
+            "null_fp_judged": len(ok), "null_fp_errors": errors}
 
 def verbatim_sanity(track: str) -> float:
     """Every verbatim pair should come back implements or partial."""
@@ -180,8 +200,7 @@ def main(track: str | None = None) -> None:  # track is accepted for run.py; S12
         out[f"cross_model_downgrades_{t}"] = downgrades
         
     # 2. Null false-positive rate
-    fpr = null_false_positive_rate()
-    out["null_false_positive_rate"] = fpr
+    out.update(null_false_positive_rate())
     
     # 3. Verbatim sanity
     out["verbatim_sanity_A"] = verbatim_sanity("A")
