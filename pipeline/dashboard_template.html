@@ -429,7 +429,7 @@ ask_go.onclick = async () => {
     <div>Matching</div><div>embeddings (${esc(C.models.embeddings)}), TF-IDF, 3-gram overlap; proposal 6-grams and widely quoted 12-grams masked</div>
     <div>Threshold</div><div>${thLine}</div>
     <div>Judge</div><div>${esc(C.models.judge)} (second opinion ${esc(C.models.second)}); ${Object.entries(C.judged_pairs).map(([k, v]) => k + ': ' + v + ' pairs').join(', ')}</div>
-    <div>Tiers</div><div>T1 verbatim and implements · T2 verbatim, or implements / partial · T3 above threshold only</div>
+    <div>Tiers</div><div>T1 verbatim and implements · T2 implements, or verbatim and partial · T3 above threshold only (incl. partial without a verbatim run)</div>
   </div><div class="kv">
     <div>Register matches</div><div>${Object.entries(C.match_methods).map(([k, v]) => esc(k) + ' ' + v).join(' · ')}</div>
     <div>Register figures</div><div>${regLine}</div>

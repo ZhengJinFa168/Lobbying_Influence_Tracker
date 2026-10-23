@@ -131,7 +131,7 @@ flowchart TD
     NULL["Same chunks vs DSA amendments<br/>tau = 99th percentile"]
     ECHO["ECHOED_IN edge<br/>above tau, or verbatim (12+ words)"]
     J["LLM judge<br/>implements / partial /<br/>contradicts / unrelated"]
-    TIER["Tier<br/>T1 verbatim + implements<br/>T2 verbatim or implements/partial<br/>T3 above threshold only"]
+    TIER["Tier<br/>T1 verbatim + implements<br/>T2 implements, or verbatim + partial<br/>T3 everything else"]
     REACH["Reach<br/>amendment survived EP report?<br/>words in the final law?"]
     ACC["Access<br/>did the organisation meet an MEP<br/>who tabled it? (carrier_met)"]
 

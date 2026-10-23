@@ -9,7 +9,7 @@ The plain shuffled null (random chunk-target pairs) is reported alongside for re
 Then every candidate with score >= tau_match, plus every verbatim pair, becomes
     (Chunk)-[:ECHOED_IN]->(Provision)   Track A
     (Chunk)-[:ECHOED_IN]->(Amendment)   Track B
-with tier T2 for verbatim pairs and T3 otherwise; S09 refines tiers with the LLM judge.
+with tier T3; S09 sets T1/T2 from the LLM judge's verdict (a verbatim run alone is not an echo tier).
 Identical runs that also occur between the chunks and the null procedure are quotes of shared legal text (the
 Charter's list of discrimination grounds, the GDPR definition of personal data); pairs whose run is such a quote
 lose the verbatim flag (shared_legal_text = true).
@@ -153,7 +153,7 @@ def main(track: str | None = None) -> None:
                                      for v, rt in zip(cand.verbatim, cand.run_text)]
         cand["verbatim"] = cand.verbatim & ~cand.shared_legal_text
         echo = cand[(cand.score >= tau) | cand.verbatim].copy()
-        echo["tier"] = np.where(echo.verbatim, "T2", "T3")
+        echo["tier"] = "T3"  # S09 sets T1/T2 from the judge's verdict
         thresholds[t] = dict(tau_match=tau, null_pairs=len(null), null_verbatim=int(null.verbatim.sum()),
                              null_verbatim_rate=float(null.verbatim.mean()), shuffled_null_99=shuffled_99,
                              candidates=len(cand), echoes=len(echo), echoes_verbatim=int(echo.verbatim.sum()),

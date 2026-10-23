@@ -6,7 +6,9 @@ Judge
 - Output (JSON schema): llm_relation (implements | partial | contradicts | unrelated), llm_direction
   (strengthens | weakens | neutral: what the target does to the obligations/protections compared with the
   proposal or status quo, in the direction the lobby text asks), overlap_quote (from the target text).
-- Tiers: T1 = verbatim and implements; T2 = verbatim, or implements / partial; T3 = everything else.
+- Tiers: T1 = verbatim and implements; T2 = implements, or verbatim and partial; T3 = everything else (incl.
+  partial without a verbatim run). Until 2026-10-23 T2 was "verbatim, or implements / partial"; S10 reports that
+  rule as a sensitivity check (query 02b).
   'unrelated' pairs stay in the graph with hidden = true.
 
 Track A stance
@@ -117,9 +119,12 @@ def judge_pairs(track: str) -> pd.DataFrame:
 
 
 def tier(verbatim: bool, rel: str | None) -> str:
+    # "partial" alone is not evidence: the judge gives it to ~1/3 of unrelated-law (null) pairs above tau_match
+    # (S12 null check: AI Act 36.5%, DSA 30%), against 0-1% for "implements". So partial counts only with a verbatim run.
+    # A verbatim run the judge calls contradicts or unrelated is not an echo either (T3).
     if verbatim and rel == "implements":
         return "T1"
-    if verbatim or rel in ("implements", "partial"):
+    if rel == "implements" or (verbatim and rel == "partial"):
         return "T2"
     return "T3"
 

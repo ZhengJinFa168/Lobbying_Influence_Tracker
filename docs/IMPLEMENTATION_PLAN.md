@@ -114,8 +114,9 @@ This section is canonical. The draft in `docs/neo4j_graph_schema.md` was reconci
 
 **Evidence tiers on `ECHOED_IN`** (text evidence only):
 - **T1:** verbatim (≥12 identical words after the stoplist) **and** LLM says `implements`.
-- **T2:** verbatim, or LLM says `implements` or `partial`.
-- **T3:** semantic score above threshold only.
+- **T2:** LLM says `implements`, or verbatim and LLM says `partial` (owner decision 2026-10-23: the S12 null check shows `partial`
+  alone is mostly noise; until then T2 was "verbatim, or `implements` or `partial`", kept as sensitivity query 02b).
+- **T3:** everything else above the threshold (incl. `partial` without a verbatim run, and verbatim runs judged `contradicts` or `unrelated`).
 
 Separately, an echo also has **reach**: does the path continue to `AdoptedAmendment` and to `LegalUnit`?
 

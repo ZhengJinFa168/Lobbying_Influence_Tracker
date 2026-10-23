@@ -626,7 +626,7 @@ function methodPage() {
       <li>Comments cut into ~130-word paragraphs; legal texts parsed into articles, paragraphs and points.</li>
       <li>Each paragraph compared with proposal provisions (pre-bill) and with the words each amendment inserts (bill): embeddings (${esc(D.models.embed)}), TF-IDF and shared phrases, with proposal quotes and widely shared quotes masked.</li>
       <li>Threshold = 99th percentile of the same comparisons against an unrelated act (${esc(ACT.null_short_label || 'the DSA')}): ${(+(t.s08?.A?.tau_match || 0)).toFixed(2)} (pre-bill), ${(+(t.s08?.B?.tau_match || 0)).toFixed(2)} (bill).</li>
-      <li>An AI judge (${esc(D.models.judge)}) rates each match: implements, partial, contradicts or unrelated. Tiers: T1 verbatim + implements, T2 verbatim or implements/partial.</li>
+      <li>An AI judge (${esc(D.models.judge)}) rates each match: implements, partial, contradicts or unrelated. Tiers: T1 verbatim + implements, T2 implements, or verbatim + partial (partial alone is mostly noise: the judge gives it to about a third of matches with an unrelated act).</li>
       <li>Amendments followed to the EP report (survival) and the final law (inserted words kept), with null-calibrated thresholds.</li>
       <li>Reach model: logistic regression for P(survive) and P(reach the law) with cross-validation and bootstrap intervals.</li>
       <li>Evaluation: cross-model agreement κ=${(+(D.eval?.cross_model_kappa_B || 0)).toFixed(2)} (Track B); null false-positive rate ${D.eval?.null_false_positive_rate == null || isNaN(+D.eval.null_false_positive_rate) ? 'not measured' : (+D.eval.null_false_positive_rate * 100).toFixed(1) + '%'}.</li></ol></div>
@@ -658,7 +658,7 @@ function articlesPage() {
     <select id="asort">${[['doc', 'Document order'], ['n_am', 'Most amendments'], ['n_law', 'Most amendments in the law'], ['n_echo', 'Most judged echoes'], ['top', 'Closest comment']]
       .map(([k, l]) => `<option value="${k}" ${k === ASORT ? 'selected' : ''}>${l}</option>`).join('')}</select><span class="muted small" id="acount"></span></div>
   <div id="agrid"></div>
-  <p class="muted small">Coloured bar = how many committee amendments the provision drew. Echoes = closest comment paragraphs the AI judge rated “implements” or “partial”.</p>`;
+  <p class="muted small">Coloured bar = how many committee amendments the provision drew. Echoes = closest comment paragraphs the AI judge rated “implements” (or “partial” with a verbatim run).</p>`;
   const topSim = a => Math.max(a.B[0]?.[1] || 0, a.A[0]?.[1] || 0);
   const draw = () => {
     const q = AQ.toLowerCase().replace(/\bart(icle)?\.?\s*(\d+)/g, 'article $2');
@@ -704,7 +704,7 @@ function articlePage(id) {
   <div class="grid g4">${stat(a.n_am, 'committee amendments', 'tabled on this ' + a.kind)}
     ${stat(a.n_survived, 'survived into the EP report', a.n_am ? pct(a.n_survived / a.n_am, 0) + ' vs ' + pct(BASE.amendment_share_survived, 0) + ' overall' : '')}
     ${stat(a.n_law, 'reached the final law', a.n_am ? pct(a.n_law / a.n_am, 1) + ' vs ' + pct(BASE.amendment_share_reached_law, 1) + ' overall' : '')}
-    ${stat(a.n_echo, 'judged echoes among the closest', 'AI judge: implements or partial')}</div>
+    ${stat(a.n_echo, 'judged echoes among the closest', 'AI judge: implements, or partial + verbatim')}</div>
   <div class="grid g-side mt" id="sec-graph" style="grid-template-columns:minmax(0,1fr) 400px">
     <div class="card"><h3>Top <span id="aktitle">${AK}</span> most similar comments</h3>
       <div class="controls">

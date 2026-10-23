@@ -101,7 +101,7 @@ def _null_amendment_fields() -> pd.DataFrame:
 
 def null_false_positive_rate() -> dict:
     """Judge comment <-> null-procedure amendment pairs above tau_match. The share the judge calls implements is the
-    false-positive rate; implements-or-partial is also reported because either gives an echo tier T2. Failed calls
+    false-positive rate; implements-or-partial is also reported (the echo rule before 2026-10-23 counted partial). Failed calls
     are counted separately and left out of the rates."""
     null_b_path = config.CACHE / "s08_null_B.parquet"
     th_path = config.DATA / "s08_thresholds.json"
