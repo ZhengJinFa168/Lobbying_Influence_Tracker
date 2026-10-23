@@ -357,7 +357,7 @@ def build() -> dict[str, pd.DataFrame]:
         f_cons = to_frame(parse_body(cl, cons_celex), cons_celex)
         adopted = f_oj.set_index("unit_id")["text"].to_dict()
         f_cons["text_as_adopted"] = f_cons["unit_id"].map(adopted)
-        f_cons["consolidated_version"] = str(f_cfg["consolidated_date"])
+        f_cons["consolidated_version"] = None if f_cfg.get("consolidated_date") is None else str(f_cfg["consolidated_date"])
         f_rec["text_as_adopted"] = f_rec["text"]
         final = pd.concat([f_rec, f_cons], ignore_index=True)
         # units only in the OJ version (removed or renumbered by M1) are kept too, flagged
