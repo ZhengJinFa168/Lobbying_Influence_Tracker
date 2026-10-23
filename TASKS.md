@@ -19,6 +19,7 @@ Status: `Todo` · `In progress` · `In review` · `Blocked` · `Done`
 | DSA W4: LLM judge and positions (prompts from config, DSA codebook, meeting keywords) | `pipeline/s09_judge_and_stance.py`, `pipeline/s12_eval.py`, `pipeline/s06b_meetings.py` | Gemini 3.8 Flash High (coder), Claude (review, merge) | `feat/dsa-w4-judge` | Done (merged) | AI Act regression passed against a base-branch run on a throwaway Neo4j |
 | DSA W5: matching and threshold (null procedure from config) | `pipeline/s05_features.py`, `pipeline/s07_match.py`, `pipeline/s08_calibrate.py` | Gemini 3.8 Flash High (coder), Claude (review, merge) | `feat/dsa-w5-matching` | Done (merged) | AI Act regression passed against a base-branch run on a throwaway Neo4j |
 | DSA W6: demo and dashboard text from config | `pipeline/s11_export_dashboard.py`, `pipeline/s11b_demo.py`, `pipeline/*_template.html`, `pipeline/serve.py` | Gemini 3.8 Flash High (coder), Claude (review, merge) | `feat/dsa-w6-demo` | Done (merged) | AI Act regression passed against a base-branch run on a throwaway Neo4j |
+| Echo rule O2: T2 = implements, or partial only when verbatim; old rule kept as a sensitivity output; README numbers updated | `pipeline/s09_judge_and_stance.py`, `pipeline/s10_analyse.py`, `README.md` | Luigi Zheng (Claude) | `feat/dsa-step0` | In progress | owner-approved 2026-10-23; changes published AI Act findings; no new LLM calls |
 | | | | | | |
 
 ## Module owners
