@@ -24,10 +24,10 @@ texts:
     date: "2020-12-15"              # verified ("Brussels, 15.12.2020")
     celex: 52020PC0825              # verified on CELLAR
     files: [52020PC0825]            # verified: no separate annex document
-    size: null                      # TODO W2: derived from the parsed proposal
+    size: {articles: 74, annexes: 0, recitals: 106}   # from the parsed proposal (S02); S01 citation limits
   final:
     date: "2022-10-19"              # verified ("of 19 October 2022")
-    adopted: 32022R2065             # verified on CELLAR (158 recitals)
+    adopted: 32022R2065             # verified on CELLAR (156 recitals)
     consolidated: null              # 02022R2065-20221027 (corrigendum) exists in CELLAR but is not served as XHTML; the OJ text suffices
     consolidated_date: null
     unit_prefix: "2022/2065"
