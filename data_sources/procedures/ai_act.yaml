@@ -1,0 +1,75 @@
+# Format approved by the owner on "2026-10-23" (protected file: changes need approval). Not read by code until config.py is wired.
+# Format for one legislative procedure. Every value here is what the code hard-codes today (see the comment on each
+# field for where), so once config.py reads this file an AI Act run must reproduce the current results exactly.
+id: ai_act                          # slug: data dir, Neo4j instance, demo URL, `--procedure ai_act`
+procedure: "2021/0106(COD)"         # config.py:15, sources.yaml:7, amendments/build_dashboard.py:526 (CLI default)
+title: Artificial Intelligence Act
+short: AI Act                       # templates, serve.py:27, s11b:29
+law: Regulation (EU) 2024/1689
+
+consultation:                       # Have Your Say. A track may be null when the procedure has no such stage.
+  initiative: 12527-Artificial-intelligence-ethical-and-legal-requirements   # s01:28 comment links
+  A:                                # comments vs the Commission proposal (S07) + stance coding (S09)
+    publication: 13340              # config.py:17, download_all_feedback.py:49, parse_and_clean_feedback.py:56
+    label: 2020 inception impact assessment
+    feedback: WebScraping/feedback/stage1_inception_13340/parsed_feedback_stage1_13340.json   # sources.yaml:24, s09:261
+  B:                                # comments vs MEP committee amendments
+    publication: 14488              # download_all_feedback.py:57, parse_and_clean_feedback.py:64
+    label: 2021 feedback on the proposal
+    feedback: WebScraping/feedback/stage2_proposal_14488/parsed_feedback_stage2_14488.json
+
+texts:                              # EUR-Lex via CELLAR, raw HTML in data_sources/eurlex/raw/<file>.html
+  proposal:
+    ref: COM(2021)206
+    date: "2021-04-21"
+    celex: 52021PC0206              # s02:322-361
+    files: [52021PC0206, 52021PC0206_annexes]
+    size: {articles: 85, annexes: 9, recitals: 89}   # s01:135 citation sanity limits; later derived from S02 output
+  final:
+    date: "2024-06-13"
+    adopted: 32024R1689             # OJ text with recitals, s02:331-333
+    consolidated: 02024R1689-20260727   # null when there is none; s02:334
+    consolidated_date: "2026-07-27"   # s02:338
+    unit_prefix: "2024/1689"        # LegalUnit.law_unit_id = "<unit_prefix>:<unit_id>", s02:344, templates
+
+parliament:                         # ParlTrack; a resolver can fill most of this from ep_dossiers.json.zst
+  lead_committee: IMCO-LIBE         # joint committee; reference category in the reach model, s10b:90
+  rapporteurs: [Brando BENIFEI, Dragoş TUDORACHE]   # s10b:33, s11b:20
+  report:
+    id: A9-0188/2023                # s00:69, s04:40
+    date: "2023-06"                   # templates
+    n_amendments: 771               # report amendments are <id>-1..n, higher numbers are plenary group ones; s00:70, s04:41
+  term: ["2019-07-02", "2024-07-15"]    # s03:24, s11b:26
+  country_date: "2022-06-01"          # MEP country looked up at this date, s03:75
+
+null_procedure: "2020/0361(COD)"    # unrelated file whose committee amendments set the S08 threshold (DSA); s08, s12
+
+meetings:                           # S06b: titles matching any include and no exclude pattern (case-insensitive regexes)
+  include: ['artificial intelligence', 'intelligence artificielle', 'k(ü|ue)nstliche intelligenz', 'inteligencia artificial',
+            'intelligenza artificiale', 'sztuczn\w* inteligencj\w*', '\bAI\b', '\bA\.I\.', '\bIA\b', '\bKI\b', '\bAI-', '\bAIA\b']
+  exclude: [liabilit, haftung, responsabilit, aansprakelijk]   # AI civil liability is another file; s06b:31-33
+
+analysis:
+  salient_articles:                 # own category in the reach model, s10b:71-73
+    - {match: '^Art3\b|^Art3\(', label: Art 3 (definitions)}
+    - {match: '^Art5\b|^Art5\(', label: Art 5 (prohibitions)}
+  featured_article: Art5            # dashboard question "where do industry and NGOs pull ... apart", s11:270
+  shared_sources:                   # caveat text naming outside texts many comments quote
+    demo: "the HLEG guidelines, the OECD definition, the White Paper"   # demo_template.html:629
+    dashboard: "HLEG, OECD, White Paper"                                # dashboard_template.html:409
+
+wording:                            # exact strings inserted into the LLM prompts; any change re-runs (and re-pays) those calls
+  topic: "AI"                       # s09:65 "make the rules on {topic} stricter"
+  judge_target_A: "a provision of the Commission's 2021 proposal"                     # s09:73
+  judge_target_B: "a European Parliament committee amendment to the 2021 proposal"    # s09:76
+  stance_consultation: "the European Commission's 2020 consultation on an AI regulation (inception impact assessment)"   # s09:191-192
+  proposal_prompt: "the European Commission's 2021 AI Act proposal"                   # s09:203
+
+stance:                             # S09 Track A codebook (issues, choices, articles), to be moved out of s09:146-174
+  codebook: data_sources/procedures/ai_act_issues.yaml   # to be created from s09:146-174 (W4); does not exist yet
+
+expect:                             # S00 sanity counts; a mismatch warns, it does not fail
+  committee_amendments: 4852        # s00:66
+  report_amendments: 771            # s00:70
+
+data_dir: data                      # legacy location so existing caches stay valid; other procedures use data/<id>

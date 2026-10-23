@@ -1,0 +1,73 @@
+# Format approved by the owner on "2026-10-23" (protected file: changes need approval). Not read by code until config.py is wired.
+# Same format as ai_act.yaml.
+# "verified" = checked against the ParlTrack dumps in amendments/ on "2026-10-23". TODO Wn = filled by that workstream.
+id: dsa
+procedure: "2020/0361(COD)"         # verified
+title: Digital Services Act
+short: DSA
+law: Regulation (EU) 2022/2065      # verified (ParlTrack dossier)
+
+consultation:
+  initiative: null                  # TODO W1
+  A:
+    publication: null               # TODO W1: 2020 inception impact assessment feedback, if it exists
+    label: 2020 inception impact assessment
+    feedback: null                  # TODO W1
+  B:
+    publication: null               # TODO W1: feedback on COM(2020)825
+    label: 2021 feedback on the proposal
+    feedback: null                  # TODO W1
+
+texts:
+  proposal:
+    ref: COM(2020)825               # verified (ParlTrack dossier)
+    date: null                      # TODO W2
+    celex: 52020PC0825              # TODO W2: confirm on CELLAR
+    files: [52020PC0825]            # TODO W2: annexes as a separate document?
+    size: null                      # TODO W2: derived from the parsed proposal
+  final:
+    date: null                      # TODO W2
+    adopted: 32022R2065             # TODO W2: confirm on CELLAR
+    consolidated: null              # TODO W2: is there a consolidated version?
+    consolidated_date: null
+    unit_prefix: "2022/2065"
+
+parliament:
+  lead_committee: IMCO              # verified; not a joint committee
+  rapporteurs: [Christel SCHALDEMOSE]   # verified (dossier); TODO W3: match the spelling in the MEP records
+  report:
+    id: A9-0356/2021                # verified: 575 plenary records = ids -1..-565 (no -564) plus 11 "/rev" variants
+    date: null                      # TODO W3
+    n_amendments: null              # TODO W3: which numbers are report amendments vs plenary group amendments
+  term: ["2019-07-02", "2024-07-15"]
+  country_date: "2021-06-01"          # middle of the committee phase; TODO W3 confirm
+
+null_procedure: "2021/0106(COD)"    # AI Act: neighbouring digital file, different topic. DMA is too close (same package and lobbies)
+
+meetings:
+  include: ['digital services act', '\bDSA\b', 'online platforms?', 'content moderation', 'illegal content',
+            'intermediary liability', 'e-commerce directive', 'notice and action']   # TODO W4: review, add languages
+  exclude: ['digital markets act', '\bDMA\b']
+
+analysis:
+  salient_articles: []              # TODO W3: e.g. the liability exemptions and the very-large-platform chapter
+  featured_article: null            # TODO W6
+  shared_sources:                   # TODO W5/W6: list texts many comments quote
+    demo: "the e-Commerce Directive"
+    dashboard: "e-Commerce Directive"
+
+wording:                            # TODO W4: review all
+  topic: "online platforms and digital services"
+  judge_target_A: "a provision of the Commission's 2020 proposal"
+  judge_target_B: "a European Parliament committee amendment to the 2020 proposal"
+  stance_consultation: "the European Commission's 2020 consultation on a Digital Services Act (inception impact assessment)"
+  proposal_prompt: "the European Commission's 2020 Digital Services Act proposal"
+
+stance:
+  codebook: data_sources/procedures/dsa_issues.yaml   # TODO W4: draft with an LLM, owner approves
+
+expect:
+  committee_amendments: 5901        # verified (IMCO 2115, JURI 1062, LIBE 785, ITRE 643, ECON 526, CULT 366, ...)
+  report_amendments: null           # TODO W3
+
+data_dir: data/dsa
