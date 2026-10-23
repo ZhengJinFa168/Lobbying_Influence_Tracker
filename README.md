@@ -125,6 +125,9 @@ docker compose -f neo4j/docker-compose.yml --env-file .env up -d
 .venv/bin/python -m pipeline.run --track B
 .venv/bin/python -m pipeline.run --from s07
 .venv/bin/python -m pipeline.run --only s11b
+
+# 5. another law (see "Other laws" below), e.g. the Digital Services Act
+.venv/bin/python -m pipeline.run --procedure dsa
 ```
 
 The ParlTrack dumps (`amendments/*.zst`, over 100 MB) are not in git; download them from ParlTrack into `amendments/`. Embeddings need the
@@ -144,7 +147,7 @@ open data/results/dashboard.html    # the analysis dashboard
 
 Press `/` (or ⌘K) in the demo to search lobbies, MEPs, articles and stories.
 
-- **Overview**: pick the act (only the AI Act is processed so far), headline numbers, the featured story.
+- **Overview**: the act (each build marks its own act as processed; see [Other laws](#other-laws)), headline numbers, the featured story.
 - **Lobbies**: ranking by influence score; each profile shows spend, meetings, interests, their 2020 positions, where their wording went and the MEPs who carried it.
 - **Articles**: click an article for a graph of the top K most similar comments, with a slider for K.
 - **Stories**: one comment followed through the amendment and the EP report into the final law, with the probability of each outcome and why.
@@ -159,23 +162,100 @@ Two buttons call a small local proxy that keeps the API key out of the page ("Ju
 
 Without the proxy the pages fall back to cached verdicts and prepared queries. For Neo4j Browser, `neo4j/demo/demo_queries.cypher` has five queries to paste one at a time.
 
+## Other laws
+
+The pipeline started as an AI Act project. It now runs ordinary legislative procedures (COD) described by a config file. The AI Act is the
+default; generalising the code was checked not to change its output (AI Act re-run on 2026-10-23), while the later echo-rule and parser
+fixes changed it on purpose (see [What we found](#what-we-found)). The Digital Services Act (2020/0361(COD)) runs end to end.
+
+### How it works now
+
+| | Now |
+|---|---|
+| Which law | Any procedure with a config file `data_sources/procedures/<id>.yaml` (`ai_act.yaml`, `dsa.yaml`); the stages read every law-specific value (IDs, report, rapporteurs, dates, prompt wording, page text) from it; the demo's list of other acts in `pipeline/s11b_demo.py` is the exception |
+| Running | `python -m pipeline.run` for the AI Act; `--procedure <id>` (or `PROCEDURE_ID=<id>`) for another law |
+| Data and database | Each law has its own `data/<id>/` folder and its own Neo4j, set in `.env.<id>`; a run that would use the AI Act database for another law is refused. The LLM cache is shared (keyed by model, prompt, schema and seed) |
+| Safety | `run.py` only runs a stage for another law if it sets `PROCEDURE_AWARE = True` (every stage does now; S00, the sanity check, always runs); config files, contracts, linter config, tests and CI are protected and change only with the owner's approval; `tach check` (pre-commit and CI) enforces module boundaries and currently fails on the boundary debt listed in `TASKS.md` |
+| Scraping | `WebScraping/*.py --procedure <id>`; SSL via certifi; PDF and Word attachments read with pypdf, pdfplumber and python-docx (in `requirements.txt`) |
+| Echo rule | T2 = *implements*, or *partial* with a verbatim run; the previous rule (verbatim, or *implements* / *partial*) is kept as a sensitivity output (query `02b`, `echoed_amendments_all.csv`) |
+| Evaluation | S12's null check judges comments against an unrelated act's amendments: 0% *implements* (AI Act) and 1% (DSA), about one third *partial* |
+
+### Adding a new law
+
+The law must be an ordinary legislative procedure (`...(COD)`) with Have Your Say feedback, committee amendments in the ParlTrack dumps
+(2019-2024 Parliament) and an adopted final act. Using the Digital Markets Act (`dma`) as the example:
+
+1. **Collect the facts.** The Have Your Say initiative and its publication IDs (2020 consultation, feedback on the proposal), from
+   `https://ec.europa.eu/info/law/better-regulation/brpapi/searchInitiatives?text=...` and `.../groupInitiatives/<id>`; the CELEX numbers of the
+   proposal and the final act; from the ParlTrack dumps the report ID, how many report amendments are the lead committee's (the rest are plenary
+   group amendments), the lead committee, the rapporteurs and the dates.
+2. **Write the config.** Copy `data_sources/procedures/dsa.yaml` to `dma.yaml` and fill it in. Pick a `null_procedure` on a different topic
+   (it sets the matching threshold). The file is protected: the owner approves it.
+3. **Get the comments.**
+   ```bash
+   .venv/bin/python WebScraping/download_all_feedback.py --procedure dma
+   .venv/bin/python WebScraping/parse_and_clean_feedback.py --procedure dma
+   ```
+4. **Get the legal texts.** Download the proposal and the final act into `data_sources/eurlex/raw/<CELEX>.html`:
+   ```bash
+   curl -L -H 'Accept: application/xhtml+xml' -H 'Accept-Language: eng' \
+        -o data_sources/eurlex/raw/<CELEX>.html https://publications.europa.eu/resource/celex/<CELEX>
+   ```
+5. **Give it a database.** Copy `neo4j/docker-compose.dsa.yml` to `docker-compose.dma.yml` and change the project `name:`, the
+   `container_name:`, both host ports and the `data-dsa`/`logs-dsa` folders (otherwise it replaces the DSA database), create `.env.dma` (gitignored) with
+   `NEO4J_URI`, `NEO4J_USER` and `NEO4J_PASSWORD`, and start it with `docker compose -f neo4j/docker-compose.dma.yml --env-file .env.dma up -d`.
+6. **Run it.** `.venv/bin/python -m pipeline.run --procedure dma` (minutes, plus LLM judging: about $0.10 for the DSA). Results go to `data/dma/`.
+7. **Check it.** S00 should report no warnings; S02 prints how well the parsed articles match the ParlTrack amendment locations (aim for 90%
+   or more exact); open `data/dma/results/demo.html` and `data/dma/results/dashboard.html`.
+8. **Optional: 2020 positions.** Track A stance coding needs a codebook `data_sources/procedures/dma_issues.yaml` (format as
+   `ai_act_issues.yaml`); without it that analysis is skipped.
+
+Plan for one to two hours, mostly step 1 and any parser fixes the new EUR-Lex HTML needs.
+
+### Limitations
+
+- **Which laws fit.** Only ordinary legislative procedures with Have Your Say feedback, committee amendments and an adopted act; the ParlTrack
+  dumps cover the 2019-2024 Parliament. Integrity Watch meetings cover 2020 and June-October 2024 only, so for most laws the access analysis is thin
+  (the DSA's committee phase, 2021, is not covered at all).
+- **Manual setup.** The facts in step 1 are looked up by hand; nothing yet fills the config from the procedure number. The EUR-Lex download
+  and the Neo4j config are manual too.
+- **Parser tested on two laws.** The EUR-Lex parser and the amendment-location matching were tuned on the AI Act and checked on the DSA; another
+  law's HTML or numbering may need small fixes.
+- **One database per law.** Each law needs its own Neo4j instance. Several laws in one graph needs a change to the graph contract.
+- **Demo shows one law per build.** Each demo lists its own law as processed and the others as "not processed yet"; the list of known acts is
+  hard-coded in `pipeline/s11b_demo.py`.
+- **Track A needs a codebook per law.** The DSA has none in the repo yet (a draft is waiting for review), so its 2020-positions analysis is skipped.
+- **Reproducibility.** S10's random baselines use a fixed seed, but the pool of MEPs they draw from is read from Neo4j without a fixed order,
+  so the baselines can shift slightly between runs. S12's cross-model check makes two LLM calls on every run whose answers do not get cached.
+- **Module boundaries.** `tach check` still reports the cross-stage imports listed in `TASKS.md` (boundary debt), so the CI check fails until
+  they are moved into shared modules.
+
+### Next steps
+
+- More laws: the Digital Markets Act and the European Health Data Space, and a resolver that fills `<id>.yaml` from the procedure number.
+- Quality: approve a DSA codebook, fix the order of S10's MEP pool, draw S12's null sample at random, clear the boundary debt.
+- Online version: several laws in one Neo4j, a small API over it, demo pages that load each law's data on request, and a queue for new laws.
+
 ## Repository layout
 
 ```
-WebScraping/        download and parse Have Your Say feedback
+WebScraping/        download and parse Have Your Say feedback (--procedure <id>)
 amendments/         ParlTrack dumps and the original amendments dashboard
-data_sources/       sources.yaml, register exports, EUR-Lex raw HTML and parsed units
+data_sources/       sources.yaml, register exports, EUR-Lex raw HTML (eurlex/raw/, all laws) and parsed units (eurlex/<id>/ for other laws),
+                    procedures/<id>.yaml (one config per law) and <id>_issues.yaml (Track A codebooks)
 docs/               ARCHITECTURE.md, IMPLEMENTATION_PLAN.md, neo4j_graph_schema.md
-neo4j/              docker-compose.yml, schema.cypher, queries/ (13 analyses), demo/ (Browser queries)
+neo4j/              docker-compose.yml (AI Act), docker-compose.dsa.yml, schema.cypher, queries/ (analyses, 02b = previous echo rule), demo/
 pipeline/           stages s00-s12, llm.py (OpenRouter client), graph.py, sources.py, embed.py, serve.py, templates
 demo/               prebuilt demo.html, opens directly in a browser
-data/               generated: caches, features, LLM cache, results (gitignored)
+data/               generated: caches, features, LLM cache, results; data/<id>/ for other laws (gitignored)
 eval/               optional hand labels for a human precision figure
+CLAUDE.md, TASKS.md how to work here (agents, protected files) and who owns what; tach.toml: module boundaries
 ```
 
 ## Configuration
 
-`pipeline/config.py` holds paths, thresholds and defaults; models and secrets come from `.env` (gitignored). Notable settings: `LLM_CONCURRENCY`,
+`pipeline/config.py` holds paths, thresholds and defaults and loads the selected law from `data_sources/procedures/<id>.yaml`; models and
+secrets come from `.env`, and another law's Neo4j from `.env.<id>` (both gitignored). Notable settings: `LLM_CONCURRENCY`,
 `LLM_MAX_PAIRS_PER_TRACK` (2,000), `NULL_PERCENTILE` (99), `VERBATIM_RUN` (12 words). Swapping a judge model is a one-line change in `.env`.
 
 ## Caveats
@@ -189,9 +269,9 @@ eval/               optional hand labels for a human precision figure
 - **The judge's *partial* is weak evidence.** On 200 unrelated-act pairs above the threshold it says *implements* 0% of the time but *partial*
   36.5% (DSA run: 1% *implements*, 30% *partial*). Echoes therefore need *implements*, or *partial* plus a verbatim run. The null sample is the first 200 pairs
   above the threshold in file order, not a random draw.
-- **Not every analysis is seeded.** S10's permutation baselines (random MEPs, random choices) change slightly from run to run.
-- **Second act.** The Digital Services Act runs end to end with `python -m pipeline.run --procedure dsa` (config in
-  `data_sources/procedures/dsa.yaml`, results in `data/dsa/`); its findings are not summarised here yet.
+- **Random baselines can shift.** S10's baselines (random MEPs, random choices) use a fixed seed, but the MEP pool is read from Neo4j without a
+  fixed order, so they can change slightly from run to run.
+- **Second act.** The Digital Services Act runs end to end (see [Other laws](#other-laws)); its findings are not summarised here yet.
 
 ## Further reading
 
