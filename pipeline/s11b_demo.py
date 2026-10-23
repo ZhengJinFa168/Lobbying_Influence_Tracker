@@ -226,7 +226,10 @@ def J(x):
 
 def csvr(name: str) -> list[dict]:
     p = R / f"{name}.csv"
-    return J(pd.read_csv(p).to_dict("records")) if p.exists() else []
+    try:
+        return J(pd.read_csv(p).to_dict("records")) if p.exists() else []
+    except pd.errors.EmptyDataError:  # empty S10 table (e.g. no Track A codebook)
+        return []
 
 
 # ---------------------------------------------------------------- MEPs

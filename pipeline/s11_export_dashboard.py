@@ -129,7 +129,10 @@ def _proc_info(dashboard: bool = True) -> dict:
 
 def csv(name: str) -> pd.DataFrame:
     p = R / f"{name}.csv"
-    return pd.read_csv(p) if p.exists() else pd.DataFrame()
+    try:
+        return pd.read_csv(p) if p.exists() else pd.DataFrame()
+    except pd.errors.EmptyDataError:  # S10 writes an empty file when a table has no rows (e.g. no Track A codebook)
+        return pd.DataFrame()
 
 
 def records(df: pd.DataFrame) -> list[dict]:
