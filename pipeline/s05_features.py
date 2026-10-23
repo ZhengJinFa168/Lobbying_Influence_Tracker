@@ -9,14 +9,14 @@ Sources (parquet caches written by S01-S03, the same rows that are in Neo4j):
   6-grams that come from it are not evidence of an echo. `ngram_tokens()` returns tokens with stoplisted
   positions masked, for S07's n-gram overlap and longest-run.
   The stoplist applies to Track B only: in Track A the proposal *is* the target, and the comments predate
-  it (0.2% of their words fall in proposal 6-grams), so a shared 6-gram there is the echo itself.
+  it (e.g. 0.2% of their words in the AI Act fall in proposal 6-grams), so a shared 6-gram there is the echo itself.
   `stoplist(track)` returns the right set.
-- TF-IDF: word 1-2-grams, sublinear tf, fitted on chunks + targets of both tracks.
+- TF-IDF: word 1-2-grams, sublinear tf, fitted on chunks + targets of the available tracks.
 - Embeddings: intfloat/multilingual-e5-base via pipeline/embed.py (cached by text hash); chunk vectors are also
   written to Chunk.embedding for the Neo4j vector index.
 
-Outputs in data/features/: stoplist_6grams.pkl, tfidf.pkl, {A,B}_{chunks,targets}.parquet (ids + text),
-{A,B}_{chunks,targets}_emb.npy, {A,B}_{chunks,targets}_tfidf.npz
+Outputs in config.FEATURES (data/features/ or data/<id>/features/): stoplist_6grams.pkl, tfidf.pkl,
+{A,B}_{chunks,targets}.parquet (ids + text), {A,B}_{chunks,targets}_emb.npy, {A,B}_{chunks,targets}_tfidf.npz
 """
 from __future__ import annotations
 
@@ -32,6 +32,9 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 from . import config, graph
 from .embed import embed
 from .textutil import ascii_fold
+
+# Procedure-aware: reads consultation tracks and paths from config
+PROCEDURE_AWARE = True
 
 log = logging.getLogger("s05")
 SOURCE = "s05_features"
@@ -102,7 +105,7 @@ def targets(track: str) -> pd.DataFrame:
 def main(track: str | None = None) -> None:
     stop = build_stoplist()
     pickle.dump(stop, open(F / "stoplist_6grams.pkl", "wb"))
-    tracks = ["A", "B"]  # TF-IDF is fitted on both tracks together, so features are always built for both
+    tracks = [t for t in ("A", "B") if t in config.PUB_IDS] or ["A", "B"]  # TF-IDF fitted on available tracks together
     tabs = {(t, k): (chunks(t) if k == "chunks" else targets(t)) for t in tracks for k in ("chunks", "targets")}
 
     vec = TfidfVectorizer(ngram_range=(1, 2), sublinear_tf=True, min_df=2, max_df=0.5,
@@ -120,8 +123,15 @@ def main(track: str | None = None) -> None:
     # vectors into Neo4j for the vector indexes (exploration and the demo): chunks, proposal units (Track A
     # targets) and amendments (Track B targets, embedding of the inserted words)
     graph.apply_schema()
-    for t, kind, label, key in [("A", "chunks", "Chunk", "chunk_id"), ("B", "chunks", "Chunk", "chunk_id"),
-                                ("A", "targets", "Provision", "unit_id"), ("B", "targets", "Amendment", "am_id")]:
+    neo_targets = []
+    for t in tracks:
+        neo_targets.append((t, "chunks", "Chunk", "chunk_id"))
+    for t in tracks:
+        if t == "A":
+            neo_targets.append(("A", "targets", "Provision", "unit_id"))
+        elif t == "B":
+            neo_targets.append(("B", "targets", "Amendment", "am_id"))
+    for t, kind, label, key in neo_targets:
         ids = pd.read_parquet(F / f"{t}_{kind}.parquet").id.tolist()
         emb = np.load(F / f"{t}_{kind}_emb.npy")
         rows = [dict(id=i, embedding=v.tolist()) for i, v in zip(ids, emb)]
