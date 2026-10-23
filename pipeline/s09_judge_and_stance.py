@@ -308,6 +308,9 @@ def main(track: str | None = None) -> None:
             log.info("Track A stance coding skipped: codebook not found (%s)", cb_rel)
             return
         issues, pos = run_stance()
+        if pos.empty:
+            log.warning("Track A stance coding produced no positions; existing TOOK_POSITION edges are left as they are")
+            return
         issues.to_parquet(config.CACHE / "s09_issues.parquet", index=False)
         pos.to_parquet(config.CACHE / "s09_positions.parquet", index=False)
         graph.merge_nodes("Issue", "issue_id", issues, SOURCE)

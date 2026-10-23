@@ -99,7 +99,7 @@ def null_false_positive_rate() -> float:
 
     if not null_b_path.is_file() or not th_path.is_file() or not null_targets_path.is_file():
         log.warning("Null false-positive inputs not found, skipping null check.")
-        return 0.0
+        return float("nan")  # not measured: never report a fabricated 0.0
 
     null_b = pd.read_parquet(null_b_path)
     th = json.loads(th_path.read_text())["B"]["tau_match"]
@@ -134,7 +134,7 @@ def stance_stability() -> tuple[float, float]:
     """How often the three models agreed on Track A proposal choices."""
     df = proposal_choices()
     if len(df) == 0:
-        return 0.0, 0.0
+        return float("nan"), float("nan")  # no codebook / proposal choices: not measured
     unanimous = (df.agreement == 1.0).sum()
     total = len(df)
     return unanimous / total if total else 0.0, float(df.agreement.mean())
@@ -168,7 +168,7 @@ def generate_labels_csv():
     except Exception as e:
         log.warning(f"Could not generate labels.csv: {e}")
 
-def main():
+def main(track: str | None = None) -> None:  # track is accepted for run.py; S12 always evaluates both tracks
     log.info("Starting S12 Evaluation...")
     out = {}
     
