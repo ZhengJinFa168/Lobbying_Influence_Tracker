@@ -132,7 +132,7 @@ def chunk_paragraphs(paras: list[str], lo: int = config.CHUNK_MIN_WORDS, hi: int
 
 # ---------------------------------------------------------------- citations
 _proc_m = re.match(r"^(\d{2})(\d{2}/\d+)", config.PROCEDURE)
-_own_ref = f"{_proc_m.group(1)}(?!{_proc_m.group(2)})" if _proc_m else "20(?!21/0106)"
+_own_ref = f"(?:No\\s+)?(?!{_proc_m.group(1)}{_proc_m.group(2)})\\d{{4}}/\\d+" if _proc_m else r"(?:No\s+)?\d{4}/\d+"
 _short = (config.PROC.get("short") or "").strip()
 _other_laws = [
     "GDPR", "TFEU", "TEU", "Charter", "Directive", "2016/679", "2019/1020",

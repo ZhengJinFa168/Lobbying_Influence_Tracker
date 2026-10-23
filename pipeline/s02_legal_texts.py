@@ -93,7 +93,8 @@ def merge_labels(lines: list[str]) -> list[str]:
 ROMAN_RE = re.compile(r"^(i|ii|iii|iv|v|vi|vii|viii|ix|x|xi|xii|xiii|xiv|xv)$")
 _ART = re.compile(r"^Article (\d+)$")
 _ANNEX = re.compile(r"^ANNEX ([IVXL]+)\b")
-_STRUCT = re.compile(r"^(TITLE|CHAPTER|SECTION|Section|PART|Part) [IVXLC0-9A-Z]+\b")
+# keyword in any case ("Chapter II", "SECTION 1"), number as Roman numeral, digits or one capital: "Part of" is not a heading
+_STRUCT = re.compile(r"^(?i:TITLE|CHAPTER|SECTION|SUBSECTION|PART)\s+(?:[IVXLC]+[A-Z]?|\d+[A-Za-z]?|[A-Z])\b")
 _REC = re.compile(r"^\((\d{1,3})\)\s*(.+)$")
 
 
