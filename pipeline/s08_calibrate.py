@@ -1,15 +1,16 @@
 """S08 Calibration, then ECHOED_IN.
 
 Null distribution: the same chunks go through the same candidate generation and scoring (S07) against an
-unrelated procedure, the Digital Services Act 2020/0361(COD) committee amendments from the same ParlTrack dump
-(inserted words only, like Track B targets). The DSA is a neighbouring digital file, so this null is strict.
+unrelated procedure (config.NULL_PROCEDURE; e.g. for the AI Act, the Digital Services Act 2020/0361(COD))
+committee amendments from the same ParlTrack dump (inserted words only, like Track B targets). This
+unrelated digital file provides a strict null.
 The plain shuffled null (random chunk-target pairs) is reported alongside for reference.
-    tau_match = 99th percentile of the DSA-null candidate scores, per track.
+    tau_match = 99th percentile of the null candidate scores, per track.
 Then every candidate with score >= tau_match, plus every verbatim pair, becomes
     (Chunk)-[:ECHOED_IN]->(Provision)   Track A
     (Chunk)-[:ECHOED_IN]->(Amendment)   Track B
 with tier T2 for verbatim pairs and T3 otherwise; S09 refines tiers with the LLM judge.
-Identical runs that also occur between the chunks and the DSA null are quotes of shared legal text (the
+Identical runs that also occur between the chunks and the null procedure are quotes of shared legal text (the
 Charter's list of discrimination grounds, the GDPR definition of personal data); pairs whose run is such a quote
 lose the verbatim flag (shared_legal_text = true).
 Finally carrier_met is set on Track B echoes: did the organisation have a recorded MET_WITH with an MEP who
@@ -20,6 +21,7 @@ from __future__ import annotations
 import json
 import logging
 import pickle
+import re
 
 import numpy as np
 import pandas as pd
@@ -30,16 +32,24 @@ from .embed import embed
 from .s07_match import N, combine, load, masked, ngrams, pair_features, tri
 from .s05_features import stoplist
 
+# Procedure-aware: null procedure and paths loaded from config.PROC / config.NULL_PROCEDURE
+PROCEDURE_AWARE = True
+
 log = logging.getLogger("s08")
 SOURCE = "s08_calibrate"
 F = config.FEATURES
 
 
 def null_targets() -> pd.DataFrame:
-    """DSA committee amendments, inserted words only (same construction as S03's added_text)."""
-    p = F / "null_dsa_targets.parquet"
+    """Committee amendments of the null procedure, inserted words only (same construction as S03's added_text)."""
+    p = config.FEATURES / ("null_targets_" + re.sub(r"\W+", "_", config.NULL_PROCEDURE).strip("_") + ".parquet")
     if p.exists():
         return pd.read_parquet(p)
+    legacy = config.FEATURES / "null_dsa_targets.parquet"
+    if config.NULL_PROCEDURE == "2020/0361(COD)" and legacy.exists():
+        df = pd.read_parquet(legacy)
+        df.to_parquet(p, index=False)
+        return df
     import importlib.util
 
     spec = importlib.util.spec_from_file_location("bd", config.ROOT / "amendments" / "build_dashboard.py")
@@ -110,9 +120,14 @@ def main(track: str | None = None) -> None:
     Ge = embed(G.text.tolist())
     Gx = vec.transform(G.text.tolist()).tocsr()
     thresholds = {}
-    graph.run("MATCH ()-[r:ECHOED_IN]->() CALL { WITH r DELETE r } IN TRANSACTIONS OF 10000 ROWS")
-    tracks = [track] if track else ["A", "B"]
-    null_all = {t: null_scores(t, G, Ge, Gx, stats[t], common) for t in ["A", "B"]}
+    del_match = "MATCH ()-[r:ECHOED_IN {track: $track}]->()" if track else "MATCH ()-[r:ECHOED_IN]->()"
+    graph.run(f"{del_match} CALL {{ WITH r DELETE r }} IN TRANSACTIONS OF 10000 ROWS",
+              **({"track": track} if track else {}))
+    available_tracks = [t for t in ("A", "B") if t in config.PUB_IDS and t in stats]
+    if not available_tracks:
+        available_tracks = [t for t in ("A", "B") if t in stats]
+    tracks = [track] if track else available_tracks
+    null_all = {t: null_scores(t, G, Ge, Gx, stats[t], common) for t in available_tracks}
     for t in tracks:
         null = null_all[t]
         null.to_parquet(config.CACHE / f"s08_null_{t}.parquet", index=False)
@@ -128,7 +143,7 @@ def main(track: str | None = None) -> None:
         sh = pd.DataFrame(dict(s_embed=np.einsum("ij,ij->i", Ce[i], Gte[j]),
                                s_tfidf=np.asarray(Cx[i].multiply(Gtx[j]).sum(axis=1)).ravel(), s_ngram=0.0))
         shuffled_99 = float(np.percentile(combine(sh, st), config.NULL_PERCENTILE))
-        # identical runs that also occur between the chunks and the DSA are quotes of shared legal text
+        # identical runs that also occur between the chunks and the null procedure are quotes of shared legal text
         # (Charter Art 21's list of grounds, the GDPR definition of personal data): not evidence of an echo
         legal = {g for r in pd.concat([null_all[k] for k in null_all]).query("verbatim").run_text
                  for g in ngrams(r.split(), config.VERBATIM_RUN)}
@@ -148,11 +163,13 @@ def main(track: str | None = None) -> None:
         graph.merge_rels("ECHOED_IN", "Chunk", "chunk_id", label, key,
                          rel[["start", "end", "track", "score", "s_embed", "s_tfidf", "s_ngram", "longest_run",
                               "run_text", "verbatim", "shared_legal_text", "tier", "candidate_sources"]], SOURCE)
-        print(f"   track {t}: tau_match={tau:.2f} (DSA null, {len(null):,} pairs; shuffled-pair null 99th = "
+        print(f"   track {t}: tau_match={tau:.2f} (null {config.NULL_PROCEDURE}, {len(null):,} pairs; shuffled-pair null 99th = "
               f"{shuffled_99:.2f}); null verbatim {int(null.verbatim.sum())} ({null.verbatim.mean():.3%}); "
               f"ECHOED_IN {len(echo):,} ({int(echo.verbatim.sum())} verbatim) from {echo.chunk_id.nunique():,} chunks")
     carrier_met()
-    (config.DATA / "s08_thresholds.json").write_text(json.dumps(thresholds, indent=2))
+    p_th = config.DATA / "s08_thresholds.json"
+    old_th = json.loads(p_th.read_text()) if p_th.exists() else {}
+    p_th.write_text(json.dumps({**old_th, **thresholds}, indent=2))
 
 
 if __name__ == "__main__":

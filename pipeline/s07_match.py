@@ -5,7 +5,7 @@ Candidates per chunk:
   - top-10 targets by embedding cosine;
   - every target sharing a 6-gram that is not in the proposal stoplist (Track B; Track A has no stoplist);
   - Track B: amendments on articles the chunk cites, the 20 closest by embedding per chunk
-    (all of them would be hundreds per chunk for much-amended articles such as Art 10).
+    (all of them would be hundreds per chunk for much-amended articles, e.g. Art 10 in the AI Act).
 Scores: s_embed (cosine), s_tfidf (cosine of 1-2-gram TF-IDF), s_ngram (share of the target's word
 3-grams, outside stoplisted spans, that occur in the chunk; denominator + 5), longest_run (longest identical word run outside
 stoplisted spans), verbatim = longest_run >= 12.
@@ -16,7 +16,7 @@ Common quotes: 12-grams present in the comments of >= 8 organisations (document 
 definitions) are masked like the stoplist, so they create neither verbatim matches nor SIMILAR_TO edges.
 Near-duplicates (SIMILAR_TO): chunk pairs from different organisations sharing an identical run of >= 12 words
 outside the stoplist, or with cosine >= 0.97 and TF-IDF cosine >= 0.5 (a shared position paper or template).
-The plan's 0.9 cosine cut-off is not used: with e5 most AI-policy paragraphs are above 0.9.
+The plan's 0.9 cosine cut-off is not used: with e5 most domain-policy paragraphs (such as AI-policy paragraphs in the AI Act) are above 0.9.
 """
 from __future__ import annotations
 
@@ -32,6 +32,9 @@ import scipy.sparse as sp
 from . import config, graph
 from .s05_features import N, ngram_tokens, ngrams, stoplist, tokens
 from .units import top
+
+# Procedure-aware: reads consultation tracks and paths from config
+PROCEDURE_AWARE = True
 
 log = logging.getLogger("s07")
 SOURCE = "s07_match"
@@ -60,13 +63,14 @@ COMMON_N, COMMON_ORGS = 12, 8
 
 
 def common_quotes() -> set[tuple]:
-    """12-grams that appear in the comments of >= 8 organisations: document titles ("White Paper on Artificial
-    Intelligence - A European approach to excellence and trust"), the inception impact assessment's title, and
+    """12-grams that appear in the comments of >= 8 organisations: document titles (e.g. "White Paper on Artificial
+    Intelligence - A European approach to excellence and trust" for the AI Act), consultation document titles, and
     widely quoted definitions. They are citations, not a position, so they are masked like the stoplist."""
     org = dict(graph.run("MATCH (o:Organisation)-[:SUBMITTED]->(:Comment)<-[:PART_OF]-(c:Chunk) "
                          "RETURN collect([c.chunk_id, o.org_id]) AS m")[0]["m"])
     seen: dict[tuple, set] = {}
-    for t in "AB":
+    tracks = [t for t in ("A", "B") if (F / f"{t}_chunks.parquet").exists()]
+    for t in tracks:
         C = pd.read_parquet(F / f"{t}_chunks.parquet")
         for cid, text in zip(C.id, C.text):
             for g in set(ngrams(tokens(text), COMMON_N)):
@@ -147,13 +151,16 @@ def match_track(track: str, common: set[tuple]) -> tuple[pd.DataFrame, dict]:
                 for j in inv.get(g, ()):
                     cand.setdefault((i, j), set()).add("shared_6gram")
     if track == "B":
-        cited = pd.read_parquet(config.CACHE / "s01_chunks_B.parquet").set_index("chunk_id").cited_articles
+        cited_path = config.CACHE / "s01_chunks_B.parquet"
+        cited = pd.read_parquet(cited_path).set_index("chunk_id").cited_articles if cited_path.exists() else {}
         by_art: dict[str, list[int]] = {}
         for j, t in enumerate(G.target_unit_id):
             if isinstance(t, str):
                 by_art.setdefault(top(t), []).append(j)
         for i, cid in enumerate(C.id):
-            js = [j for a in (cited.get(cid) if cited.get(cid) is not None else []) for j in by_art.get(a, [])]
+            val = cited.get(cid)
+            c_arts = val if isinstance(val, (list, tuple, np.ndarray)) else []
+            js = [j for a in c_arts for j in by_art.get(a, [])]
             if js:
                 js = np.array(js)
                 for j in js[np.argsort(-S[i, js])[:CITED_PER_CHUNK]]:
@@ -178,7 +185,10 @@ def match_track(track: str, common: set[tuple]) -> tuple[pd.DataFrame, dict]:
 
 # ---------------------------------------------------------------- near-duplicate chunks
 def similar_chunks(common: set[tuple]) -> pd.DataFrame:
-    parts = [load(t, "chunks") for t in "AB"]
+    tracks = [t for t in ("A", "B") if (F / f"{t}_chunks.parquet").exists()]
+    parts = [load(t, "chunks") for t in tracks]
+    if not parts:
+        return pd.DataFrame(columns=["start", "end", "score", "s_tfidf", "longest_run", "run_text"])
     C = pd.concat([p[0] for p in parts], ignore_index=True)
     E = np.vstack([p[1] for p in parts])
     X = sp.vstack([p[2] for p in parts]).tocsr()
@@ -217,7 +227,9 @@ def main(track: str | None = None) -> None:
     common = common_quotes()
     pickle.dump(common, open(F / "common_quotes_12grams.pkl", "wb"))
     print(f"   common quotes masked: {len(common)} 12-grams found in >= {COMMON_ORGS} organisations' comments")
-    for t in ([track] if track else ["A", "B"]):
+    available_tracks = [t for t in ("A", "B") if t in config.PUB_IDS] or ["A", "B"]
+    tracks = [track] if track else available_tracks
+    for t in tracks:
         df, st = match_track(t, common)
         df.to_parquet(config.CACHE / f"s07_candidates_{t}.parquet", index=False)
         stats[t] = st
