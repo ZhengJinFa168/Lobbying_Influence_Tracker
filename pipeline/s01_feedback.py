@@ -170,7 +170,7 @@ def cited_units(text: str) -> list[str]:
         if _OTHER_LAW.match(text[m.end() : m.end() + 60]):
             continue
         for r in re.findall(r"[IVX]{1,4}", m.group(1)):
-            if MAX_ANNEX is None or ROMAN.get(r, 99) <= MAX_ANNEX:
+            if r in ROMAN and (MAX_ANNEX is None or ROMAN[r] <= MAX_ANNEX):
                 out.append(f"Annex{r}")
     for m in _REC.finditer(text):
         if _OTHER_LAW.match(text[m.end() : m.end() + 60]):
@@ -194,10 +194,8 @@ def build(track: str) -> dict[str, pd.DataFrame]:
     feedback_rel = config.PROC["consultation"][track]["feedback"]
     feedback_path = config.ROOT / feedback_rel
     if not feedback_path.exists():
-        log.warning("feedback file not found: %s", feedback_path)
-        recs = []
-    else:
-        recs = json.loads(feedback_path.read_text(encoding="utf-8"))
+        raise SystemExit(f"S01 track {track}: feedback file not found: {feedback_rel} (run the WebScraping scripts first)")
+    recs = json.loads(feedback_path.read_text(encoding="utf-8"))
     raw = {str(r["id"]): r for r in sources.raw_feedback(pub)}
     orgs, comments, chunks, ctx, cites = [], [], [], [], []
     stats = Counter()
