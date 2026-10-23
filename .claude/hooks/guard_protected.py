@@ -18,6 +18,7 @@ import sys
 # Repo-relative glob patterns (fnmatch: `*` also matches `/`). Compared casefolded.
 PROTECTED = {
     "graph contract": ["neo4j/schema.cypher", "docs/IMPLEMENTATION_PLAN.md", "docs/neo4j_graph_schema.md"],
+    "procedure config": ["data_sources/procedures/*"],
     "linter config": ["tach.toml", ".pre-commit-config.yaml", "requirements-dev.txt"],
     "tests": ["tests/*", "*/tests/*", "test_*.py", "*/test_*.py", "*_test.py", "conftest.py", "*/conftest.py"],
     "CI": [".github/*"],
@@ -27,7 +28,7 @@ PROTECTED = {
 
 # Substrings (casefolded) that identify a protected path inside a shell command.
 BASH_NEEDLES = [
-    "schema.cypher", "implementation_plan.md", "neo4j_graph_schema.md",
+    "schema.cypher", "implementation_plan.md", "neo4j_graph_schema.md", "data_sources/procedures",
     "tach.toml", ".pre-commit-config", "requirements-dev.txt",
     "test_", "_test.py", "conftest.py",
     ".github", "claude.md", ".claude/settings", ".claude/hooks", ".claude/agents",

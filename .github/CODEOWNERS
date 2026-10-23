@@ -7,6 +7,9 @@
 /docs/IMPLEMENTATION_PLAN.md      @ZhengJinFa168
 /docs/neo4j_graph_schema.md       @ZhengJinFa168
 
+# Per-procedure config (the interface every stage reads)
+/data_sources/procedures/         @ZhengJinFa168
+
 # Module boundaries and linter config
 /tach.toml                        @ZhengJinFa168
 /.pre-commit-config.yaml          @ZhengJinFa168

@@ -38,6 +38,7 @@ Humans own interfaces and contracts; agents own module internals.
 - **Protected files: never edit without asking the user first.** A `PreToolUse` hook (`.claude/hooks/guard_protected.py`) sends every write to these for approval,
   and `.github/CODEOWNERS` requires the owner's review on PRs. Do not work around either one (no Bash writes, no copies, no disabling the hook).
   - Graph contract: `neo4j/schema.cypher`, `docs/IMPLEMENTATION_PLAN.md`, `docs/neo4j_graph_schema.md`
+  - Procedure config: `data_sources/procedures/*.yaml` (one file per law; the format is fixed, fill `TODO` values only with approval)
   - Linter config: `tach.toml`, `.pre-commit-config.yaml`, `requirements-dev.txt`
   - Tests: `tests/`, `test_*.py`, `*_test.py`, `conftest.py`
   - CI: `.github/`
