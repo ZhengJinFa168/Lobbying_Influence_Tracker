@@ -1,0 +1,29 @@
+# Humans own interfaces and contracts; agents own module internals.
+# Changes to these paths need a review from the owner below (enforced once branch protection
+# on main has "Require review from Code Owners" turned on).
+
+# Graph contract
+/neo4j/schema.cypher              @ZhengJinFa168
+/docs/IMPLEMENTATION_PLAN.md      @ZhengJinFa168
+/docs/neo4j_graph_schema.md       @ZhengJinFa168
+
+# Module boundaries and linter config
+/tach.toml                        @ZhengJinFa168
+/.pre-commit-config.yaml          @ZhengJinFa168
+/requirements-dev.txt             @ZhengJinFa168
+
+# Tests (none yet)
+**/tests/                         @ZhengJinFa168
+**/test_*.py                      @ZhengJinFa168
+**/*_test.py                      @ZhengJinFa168
+**/conftest.py                    @ZhengJinFa168
+
+# CI and this file
+/.github/                         @ZhengJinFa168
+
+# Agent guardrails
+/.claude/settings.json            @ZhengJinFa168
+/.claude/settings.local.json      @ZhengJinFa168
+/.claude/hooks/                   @ZhengJinFa168
+/.claude/agents/                  @ZhengJinFa168
+/CLAUDE.md                        @ZhengJinFa168

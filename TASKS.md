@@ -29,6 +29,22 @@ Default point of contact per area. Anyone may work on a module, but tell its own
 | Dashboard and demo | `pipeline/s11_export_dashboard.py`, `pipeline/s11b_demo.py`, `pipeline/*_template.html`, `pipeline/serve.py`, `demo/` | |
 | Shared core | `pipeline/config.py`, `pipeline/run.py`, `pipeline/sources.py`, `requirements.txt` | |
 
+## Boundary debt
+
+Cross-stage imports that break the rule "a stage's only public name is `main()`" (`tach check` fails until they are gone).
+Fix by moving the shared code into a shared module (`textutil`, `units`, a new `pipeline/<name>.py` utility added to `tach.toml` with approval)
+or by reading the data from Neo4j / `config.py` paths. Claim a row before starting.
+
+| Importer | Imports | From | Suggested home | Owner | Status |
+|---|---|---|---|---|---|
+| `pipeline/s06b_meetings.py:26` | `_acronym`, `mnorm` | `s06_orgs` | org-name helpers into `textutil` (or new `orgnames.py`) | | Todo |
+| `pipeline/s07_match.py:33` | `N`, `ngram_tokens`, `ngrams`, `stoplist`, `tokens` | `s05_features` | new shared `ngrams.py` | | Todo |
+| `pipeline/s08_calibrate.py:30-31` | `N`, `combine`, `load`, `masked`, `ngrams`, `pair_features`, `tri`; `stoplist` | `s07_match`, `s05_features` | new shared `matching.py` / `ngrams.py` | | Todo |
+| `pipeline/s10_analyse.py:83` | `ISSUES` | `s09_judge_and_stance` | constant into `config.py` | | Todo |
+| `pipeline/s11b_demo.py:20` | `RAPPORTEURS` | `s10b_reach_model` | constant into `config.py` | | Todo |
+| `pipeline/s12_eval.py:23` | `judge`, `proposal_choices`, `_parts`, `_codebook`, `_stance_schema`, `NA`, `STANCE_PROMPT`, `STANCE_SYSTEM` | `s09_judge_and_stance` | new shared `judge.py` (prompts, schema, judge) | | Todo |
+| `pipeline/serve.py:22` | whole module (`judge_pairs`, `judge_prompt`, `JUDGE_SCHEMA`, `JUDGE_SYSTEM`) | `s09_judge_and_stance` | same `judge.py` | | Todo |
+
 ## Graph contract changes
 
 Log any change to node labels, relationship types or properties so downstream owners can update their stages and queries.

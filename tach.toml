@@ -1,0 +1,148 @@
+# Module boundaries for the pipeline package, checked by `tach check` (pre-commit hook + CI).
+# Protected file: changes need the repo owner's approval (see CLAUDE.md and .github/CODEOWNERS).
+#
+# Rules:
+# - Shared core (config, graph, llm, embed, sources, textutil, units) are utility modules:
+#   any module may import their public (non-underscore) names, and they may not import stages.
+# - Stages (sNN_*), run and serve depend on the shared core only. A stage's only public name is main().
+#   Code another stage needs belongs in a shared module, not in a cross-stage import.
+
+source_roots = ["."]
+exclude = [".venv", "data", "demo", "data_sources", "amendments", "WebScraping", "neo4j", "docs", "**/__pycache__"]
+root_module = "ignore"
+forbid_circular_dependencies = true
+ignore_type_checking_imports = true
+
+# Parent of every file under pipeline/. Files not declared below (a new module) fall back to it,
+# and nothing may depend on it, so a new module is unusable until it is declared here (with approval).
+
+[[modules]]
+path = "pipeline"
+depends_on = []
+
+# Shared core
+
+[[modules]]
+path = "pipeline.config"
+depends_on = []
+utility = true
+
+[[modules]]
+path = "pipeline.graph"
+depends_on = ["pipeline.config"]
+utility = true
+
+[[modules]]
+path = "pipeline.llm"
+depends_on = ["pipeline.config"]
+utility = true
+
+[[modules]]
+path = "pipeline.embed"
+depends_on = ["pipeline.config"]
+utility = true
+
+[[modules]]
+path = "pipeline.sources"
+depends_on = ["pipeline.config"]
+utility = true
+
+[[modules]]
+path = "pipeline.textutil"
+depends_on = []
+utility = true
+
+[[modules]]
+path = "pipeline.units"
+depends_on = []
+utility = true
+
+# Entry points (run imports stages dynamically through importlib, which Tach does not see)
+
+[[modules]]
+path = "pipeline.run"
+depends_on = []
+
+[[modules]]
+path = "pipeline.serve"
+depends_on = []
+
+# Stages
+
+[[modules]]
+path = "pipeline.s00_check"
+depends_on = []
+
+[[modules]]
+path = "pipeline.s01_feedback"
+depends_on = []
+
+[[modules]]
+path = "pipeline.s02_legal_texts"
+depends_on = []
+
+[[modules]]
+path = "pipeline.s03_amendments"
+depends_on = []
+
+[[modules]]
+path = "pipeline.s04_survival"
+depends_on = []
+
+[[modules]]
+path = "pipeline.s05_features"
+depends_on = []
+
+[[modules]]
+path = "pipeline.s06_orgs"
+depends_on = []
+
+[[modules]]
+path = "pipeline.s06b_meetings"
+depends_on = []
+
+[[modules]]
+path = "pipeline.s07_match"
+depends_on = []
+
+[[modules]]
+path = "pipeline.s08_calibrate"
+depends_on = []
+
+[[modules]]
+path = "pipeline.s09_judge_and_stance"
+depends_on = []
+
+[[modules]]
+path = "pipeline.s10_analyse"
+depends_on = []
+
+[[modules]]
+path = "pipeline.s10b_reach_model"
+depends_on = []
+
+[[modules]]
+path = "pipeline.s11_export_dashboard"
+depends_on = []
+
+[[modules]]
+path = "pipeline.s11b_demo"
+depends_on = []
+
+[[modules]]
+path = "pipeline.s12_eval"
+depends_on = []
+
+# Public entry points. `from` and `expose` are full-match regexes.
+# Only `from X import name` is checked; attribute access on a module import (`graph._x`) is not.
+
+[[interfaces]]
+expose = ["main"]
+from = ["pipeline\\.s\\d.*"]
+
+[[interfaces]]
+expose = ["[^_].*"]
+from = [
+    "pipeline\\.config", "pipeline\\.graph", "pipeline\\.llm", "pipeline\\.embed",
+    "pipeline\\.sources", "pipeline\\.textutil", "pipeline\\.units",
+]

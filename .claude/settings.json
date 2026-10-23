@@ -1,0 +1,27 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(agy -p:*)",
+      "Bash(git diff:*)",
+      "Bash(git status:*)",
+      "Bash(tach check:*)",
+      "Bash(.venv/bin/tach check:*)",
+      "Bash(pre-commit run:*)",
+      "Bash(.venv/bin/pre-commit run:*)"
+    ]
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Edit|Write|MultiEdit|NotebookEdit|Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR/.claude/hooks/guard_protected.py\"",
+            "timeout": 10
+          }
+        ]
+      }
+    ]
+  }
+}
