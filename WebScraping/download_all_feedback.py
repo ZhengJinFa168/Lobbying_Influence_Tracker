@@ -27,13 +27,17 @@ import os
 import sys
 import re
 import argparse
+import ssl
 from typing import Dict, Any, List, Optional
+import certifi
 import yaml
 
 # =====================================================================
 # CONFIGURAZIONE GENERALE E COSTANTI
 # =====================================================================
 
+# certifi's CA bundle: some Python builds (e.g. uv-managed) ship without system certificates
+SSL_CONTEXT = ssl.create_default_context(cafile=certifi.where())
 BASE_URL = "https://ec.europa.eu/info/law/better-regulation/api/allFeedback"
 DOWNLOAD_URL_TEMPLATE = "https://ec.europa.eu/info/law/better-regulation/api/download/{document_id}"
 
@@ -174,7 +178,7 @@ def download_attachment_file(url: str, output_path: str, max_retries: int = 3) -
 
     for attempt in range(1, max_retries + 1):
         try:
-            with urllib.request.urlopen(req, timeout=30) as resp:
+            with urllib.request.urlopen(req, timeout=30, context=SSL_CONTEXT) as resp:
                 content = resp.read()
                 if len(content) > 100:
                     with open(output_path, "wb") as f:
@@ -274,7 +278,7 @@ def download_stage(stage_num: int, base_dir: str, stages_config: Optional[Dict[i
         req = urllib.request.Request(url, headers=HEADERS)
 
         try:
-            with urllib.request.urlopen(req, timeout=15) as resp:
+            with urllib.request.urlopen(req, timeout=15, context=SSL_CONTEXT) as resp:
                 if resp.status != 200:
                     print(f"⚠️ Errore HTTP {resp.status} a pagina {page}")
                     break
