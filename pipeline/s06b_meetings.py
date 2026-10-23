@@ -10,7 +10,7 @@
     token_set_ratio >= 95 with one name starting with the other or token_sort >= 95, clear winner -> 0.7
   Unmatched names (embassies, ministries, firms outside the consultation) are dropped, not created.
 - One MET_WITH per meeting (keyed by meeting_id), with date, title, location, mep_role, period (2020 / 2024)
-  and ai_related (AI terms in the title, excluding the separate AI civil-liability file).
+  and ai_related (procedure terms in the title matching include and not exclude patterns).
 - Coverage: meetings exist only for 2020 and Jun-Oct 2024. A missing meeting means "not recorded".
 """
 from __future__ import annotations
@@ -26,11 +26,15 @@ from . import config, graph, sources
 from .s06_orgs import _acronym, mnorm
 from .textutil import TR_RE
 
+PROCEDURE_AWARE = True  # title filters loaded from config.PROC["meetings"]
 log = logging.getLogger("s06b")
 SOURCE = "s06b_meetings"
-AI_RE = re.compile(r"artificial intelligence|intelligence artificielle|k(ü|ue)nstliche intelligenz|inteligencia artificial|"
-                   r"intelligenza artificiale|sztuczn\w* inteligencj\w*|\bAI\b|\bA\.I\.|\bIA\b|\bKI\b|\bAI-|\bAIA\b", re.I)
-NOT_AI_RE = re.compile(r"liabilit|haftung|responsabilit|aansprakelijk", re.I)  # AI civil liability is another file
+
+_meetings_cfg = (config.PROC or {}).get("meetings", {}) if isinstance(config.PROC, dict) else {}
+_inc = _meetings_cfg.get("include") or []
+_exc = _meetings_cfg.get("exclude") or []
+AI_RE = re.compile("|".join(_inc) if _inc else r"$^", re.I)
+NOT_AI_RE = re.compile("|".join(_exc) if _exc else r"$^", re.I)
 SPLIT_RE = re.compile(r"\s*;\s*|\s+/\s+|\s+and\s+|,\s+(?=[A-Z])")
 
 
@@ -165,7 +169,7 @@ def main(track: str | None = None) -> None:
     load_graph(met, meps)
     n_orgs = graph.run("MATCH (o:Organisation) RETURN count(o) AS n")[0]["n"]
     with_m = met.start.nunique()
-    print(f"   {len(met)} MET_WITH edges ({met.ai_related.sum()} AI-related) between {with_m} of {n_orgs} "
+    print(f"   {len(met)} MET_WITH edges ({met.ai_related.sum()} procedure-related) between {with_m} of {n_orgs} "
           f"consultation organisations and {met.end.nunique()} MEPs; methods {met.match_method.value_counts().to_dict()}")
     print(f"   by period: {met.period.value_counts().to_dict()}; meeting-only MEP nodes added: "
           f"{(~meps.mep_id.isin(graph.run('MATCH (m:MEP) WHERE m.source <> $s RETURN collect(m.mep_id) AS ids', s=SOURCE)[0]['ids'])).sum()}")
