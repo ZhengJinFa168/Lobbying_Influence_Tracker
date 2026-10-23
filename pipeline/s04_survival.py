@@ -1,8 +1,8 @@
 """S04 Survival -> AdoptedAmendment, SURVIVED_AS, BECAME; sets Amendment.survived / reached_law.
 
-1. AdoptedAmendment: the 771 report amendments A9-0188/2023-1..771 (IMCO-LIBE report, plenary June 2023).
-   The plenary dump also holds 37 amendments tabled in plenary by groups (A9-0188/2023-774..807); they are
-   not report amendments and are left out.
+1. AdoptedAmendment: the report amendments <report_id>-1..n (e.g. A9-0188/2023-1..771 for the AI Act
+   IMCO-LIBE report, plenary June 2023). Plenary dumps also hold amendments tabled in plenary by
+   groups (e.g. A9-0188/2023-774..807 for the AI Act); they are not report amendments and are left out.
 2. Committee amendment -> adopted amendment on the same proposal unit, scored on what the committee amendment
    *inserts* (content words not already in the proposal unit), so shared proposal wording doesn't count:
        survival_score = 0.5 * share of inserted content words found in the adopted text
@@ -15,7 +15,7 @@
 3. BECAME (Provision | AdoptedAmendment -> LegalUnit): the final act was renumbered, so units are matched by
    text: top-10 by embedding, scored 0.5 * cosine + 0.5 * token_set_ratio, best one kept when >= tau_b
    (99th percentile of the best score over 10 random final units of the same kind). Final units are compared
-   in their 2024 as-adopted wording.
+   in their as-adopted wording (e.g. 2024 for the AI Act).
 4. reached_law: for adopted amendments, BECAME plus `added_kept` = share of the amendment's inserted content
    words (not already in the proposal) found in the law unit, >= tau_k (99th percentile against random law units). A committee amendment
    reached the law when it survived as an adopted amendment that reached the law.
@@ -34,11 +34,13 @@ from . import config, graph, sources
 from .embed import embed
 from .units import location_to_unit, resolve, top
 
+PROCEDURE_AWARE = True  # opted in to multi-procedure runs via config.PROC
+
 log = logging.getLogger("s04")
 SOURCE = "s04_survival"
 RNG = np.random.default_rng(42)
-REPORT_RE = re.compile(r"^A9-0188/2023-(\d+)$")
-N_REPORT = 771
+REPORT_RE = re.compile(rf"^{re.escape(config.PROC['parliament']['report']['id'])}-(\d+)$")
+N_REPORT = config.PROC["parliament"]["report"]["n_amendments"]
 
 STOP = set("""a an the and or of to in on for by with as at from that this these those be is are was were been being
 it its their they them which who whom whose such any all each other than then also not no nor but if where when
