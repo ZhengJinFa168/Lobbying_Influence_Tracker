@@ -3,9 +3,11 @@
 download_all_feedback.py
 ========================
 Script parametrico per lo scraping dei feedback pubblici della Commissione Europea
-sull'AI Act (Have Your Say) per entrambe le fasi:
-  - Stage 1: Inception Impact Assessment (Publication ID: 13340, 2020)
-  - Stage 2: Proposal for a Regulation (Publication ID: 14488, 2021)
+(Have Your Say) per entrambe le fasi:
+  - Stage 1: Inception Impact Assessment
+  - Stage 2: Proposal for a Regulation
+
+Supporta qualsiasi procedura legislativa definita in data_sources/procedures/<id>.yaml (default: ai_act).
 
 Filtra sia l'industria che la società civile:
   - COMPANY
@@ -26,6 +28,7 @@ import sys
 import re
 import argparse
 from typing import Dict, Any, List, Optional
+import yaml
 
 # =====================================================================
 # CONFIGURAZIONE GENERALE E COSTANTI
@@ -43,25 +46,80 @@ TARGET_USER_TYPES = {
     "TRADE_UNION"               # Sindacati dei lavoratori
 }
 
-# Configurazione per ciascuno stage
-STAGES_CONFIG = {
-    1: {
-        "publication_id": 13340,
-        "stage_name": "STAGE_1_INCEPTION_FEEDBACK",
-        "title": "Stage 1 (Inception Impact Assessment 2020 - PubID 13340)",
-        "folder": "feedback/stage1_inception_13340",
-        "output_file": "feedback/stage1_inception_13340/raw_feedback_stage1_13340.json",
-        "attachments_dir": "feedback/stage1_inception_13340/attachments"
-    },
-    2: {
-        "publication_id": 14488,
-        "stage_name": "STAGE_2_PROPOSAL_FEEDBACK",
-        "title": "Stage 2 (Proposal for a Regulation 2021 - PubID 14488)",
-        "folder": "feedback/stage2_proposal_14488",
-        "output_file": "feedback/stage2_proposal_14488/raw_feedback_stage2_14488.json",
-        "attachments_dir": "feedback/stage2_proposal_14488/attachments"
-    }
-}
+def load_stages_config(procedure_id: str = "ai_act", base_dir: Optional[str] = None) -> Dict[int, Dict[str, Any]]:
+    """
+    Carica la configurazione degli stage da data_sources/procedures/<procedure_id>.yaml.
+    Mappa:
+      - consultation.A.publication -> Stage 1 ("inception", cartella feedback/stage1_inception_<pub>/)
+      - consultation.B.publication -> Stage 2 ("proposal", cartella feedback/stage2_proposal_<pub>/)
+    I track la cui pubblicazione è null vengono ignorati.
+    """
+    if base_dir is None:
+        base_dir = os.path.dirname(os.path.abspath(__file__))
+    repo_root = os.path.abspath(os.path.join(base_dir, ".."))
+    proc_id = procedure_id.strip().removesuffix(".yaml")
+    procedures_dir = os.path.join(repo_root, "data_sources", "procedures")
+    yaml_path = os.path.join(procedures_dir, f"{proc_id}.yaml")
+
+    if not os.path.isfile(yaml_path):
+        known = ", ".join(sorted(f.removesuffix(".yaml") for f in os.listdir(procedures_dir) if f.endswith(".yaml")))
+        raise SystemExit(f"unknown procedure {proc_id!r}: expected data_sources/procedures/<id>.yaml, one of: {known}")
+
+    with open(yaml_path, "r", encoding="utf-8") as f:
+        data = yaml.safe_load(f) or {}
+
+    consultation = data.get("consultation", {})
+    configs: Dict[int, Dict[str, Any]] = {}
+
+    # Stage 1: Track A (inception)
+    cA = consultation.get("A")
+    if isinstance(cA, dict) and cA.get("publication") is not None:
+        pub_a = int(cA["publication"])
+        folder_a = f"feedback/stage1_inception_{pub_a}"
+        if proc_id == "ai_act":
+            title_a = "Stage 1 (Inception Impact Assessment 2020 - PubID 13340)"
+        else:
+            label_a = (cA.get("label") or "Inception Impact Assessment").strip()
+            title_a = f"Stage 1 ({label_a} - PubID {pub_a})"
+
+        configs[1] = {
+            "publication_id": pub_a,
+            "stage_name": "STAGE_1_INCEPTION_FEEDBACK",
+            "title": title_a,
+            "folder": folder_a,
+            "output_file": f"{folder_a}/raw_feedback_stage1_{pub_a}.json",
+            "raw_json": f"{folder_a}/raw_feedback_stage1_{pub_a}.json",
+            "parsed_json": f"{folder_a}/parsed_feedback_stage1_{pub_a}.json",
+            "attachments_dir": f"{folder_a}/attachments",
+        }
+
+    # Stage 2: Track B (proposal)
+    cB = consultation.get("B")
+    if isinstance(cB, dict) and cB.get("publication") is not None:
+        pub_b = int(cB["publication"])
+        folder_b = f"feedback/stage2_proposal_{pub_b}"
+        if proc_id == "ai_act":
+            title_b = "Stage 2 (Proposal for a Regulation 2021 - PubID 14488)"
+        else:
+            label_b = (cB.get("label") or "Proposal for a Regulation").strip()
+            title_b = f"Stage 2 ({label_b} - PubID {pub_b})"
+
+        configs[2] = {
+            "publication_id": pub_b,
+            "stage_name": "STAGE_2_PROPOSAL_FEEDBACK",
+            "title": title_b,
+            "folder": folder_b,
+            "output_file": f"{folder_b}/raw_feedback_stage2_{pub_b}.json",
+            "raw_json": f"{folder_b}/raw_feedback_stage2_{pub_b}.json",
+            "parsed_json": f"{folder_b}/parsed_feedback_stage2_{pub_b}.json",
+            "attachments_dir": f"{folder_b}/attachments",
+        }
+
+    return configs
+
+
+# Configurazione di default per retrocompatibilità (ai_act)
+STAGES_CONFIG = load_stages_config("ai_act")
 
 SHORT_COMMENT_THRESHOLD = 200
 
@@ -182,8 +240,10 @@ def extract_text_from_file(file_path: str) -> str:
 # MOTORE DI DOWNLOAD PER SINGOLO STAGE
 # =====================================================================
 
-def download_stage(stage_num: int, base_dir: str):
-    conf = STAGES_CONFIG[stage_num]
+def download_stage(stage_num: int, base_dir: str, stages_config: Optional[Dict[int, Dict[str, Any]]] = None):
+    if stages_config is None:
+        stages_config = STAGES_CONFIG
+    conf = stages_config[stage_num]
     pub_id = conf["publication_id"]
     stage_name = conf["stage_name"]
     output_file = os.path.join(base_dir, conf["output_file"])
@@ -318,7 +378,12 @@ def download_stage(stage_num: int, base_dir: str):
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Scarica i feedback e gli allegati per Stage 1 (13340) e Stage 2 (14488) dell'AI Act."
+        description="Scarica i feedback e gli allegati per le consultazioni della Commissione Europea (Have Your Say)."
+    )
+    parser.add_argument(
+        "--procedure", "-p",
+        default="ai_act",
+        help="ID procedura in data_sources/procedures/<id>.yaml (default: ai_act)"
     )
     parser.add_argument(
         "--stage", "-s",
@@ -329,12 +394,19 @@ def main():
 
     args = parser.parse_args()
     script_dir = os.path.dirname(os.path.abspath(__file__))
+    stages_config = load_stages_config(args.procedure, script_dir)
 
     if args.stage in ["1", "all"]:
-        download_stage(1, script_dir)
+        if 1 in stages_config:
+            download_stage(1, script_dir, stages_config)
+        elif args.stage == "1":
+            print(f"⚠️ Stage 1 non configurato per la procedura '{args.procedure}' (publication è null).")
 
     if args.stage in ["2", "all"]:
-        download_stage(2, script_dir)
+        if 2 in stages_config:
+            download_stage(2, script_dir, stages_config)
+        elif args.stage == "2":
+            print(f"⚠️ Stage 2 non configurato per la procedura '{args.procedure}' (publication è null).")
 
 
 if __name__ == "__main__":
