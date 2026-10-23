@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>AI Act Lobby Echoes</title>
+<title id="page_title">AI Act Lobby Echoes</title>
 <style>
 :root {
   color-scheme: light;
@@ -79,8 +79,8 @@ a { color: var(--accent); }
 </head>
 <body>
 <div class="wrap">
-  <h1>Do lobby comments show up in the AI Act?</h1>
-  <p class="sub">Stakeholder comments on the AI Act (Have Your Say 2020 and 2021) matched against the Commission proposal (Track A)
+  <h1 id="page_h1">Do lobby comments show up in the AI Act?</h1>
+  <p class="sub" id="page_sub">Stakeholder comments on the AI Act (Have Your Say 2020 and 2021) matched against the Commission proposal (Track A)
   and the European Parliament committee amendments (Track B), followed through the EP report to Regulation (EU) 2024/1689.
   An <b>echo</b> is a text match above a null-calibrated threshold, judged by an LLM; it is evidence of similar wording, not proof of cause.</p>
   <nav>
@@ -95,7 +95,7 @@ a { color: var(--accent); }
     <div class="controls"><label class="chk"><input type="radio" name="fm" value="amendment" checked> per echoed amendment</label>
       <label class="chk"><input type="radio" name="fm" value="echo"> per echo</label></div>
     <div id="f_funnel"></div>
-    <p class="note">Share of echoed amendments that survived into the EP report (June 2023) and reached the final law, by the type of
+    <p class="note" id="funnel_note">Share of echoed amendments that survived into the EP report (June 2023) and reached the final law, by the type of
     organisation whose comment they echo, against the base rate of all 4,852 committee amendments. Judged echoes only (tiers T1/T2).
     Per-echo counting gives more weight to amendments echoed by many paragraphs.</p>
   </div>
@@ -145,7 +145,7 @@ a { color: var(--accent); }
   <div class="grid2" id="carriers">
     <div class="card"><h2>Carriers: MEPs tabling amendments that echo an organisation</h2>
       <div class="scroll"><table><thead><tr><th>Organisation</th><th>MEP</th><th>Group</th><th>Amend.</th><th>In law</th><th>Meetings</th></tr></thead><tbody id="c_tb"></tbody></table></div>
-      <p class="note">Meetings = recorded Integrity Watch meetings between the two (2020 and Jun–Oct 2024 only).</p></div>
+      <p class="note" id="carriers_note">Meetings = recorded Integrity Watch meetings between the two (2020 and Jun–Oct 2024 only).</p></div>
     <div class="card"><h2>Brokers (betweenness)</h2>
       <table><thead><tr><th>MEP</th><th>Group</th><th>Betweenness</th></tr></thead><tbody id="b_tb"></tbody></table>
       <p class="note">MEPs that sit between organisations (through amendments they tabled) and the adopted text.</p></div>
@@ -155,7 +155,7 @@ a { color: var(--accent); }
     <h2>Money vs influence</h2>
     <div class="grid2"><div id="f_money" style="height:420px"></div>
       <div><table><thead><tr><th>Metric</th><th>n</th><th>Spearman ρ</th><th>95% CI</th></tr></thead><tbody id="m_tb"></tbody></table>
-      <p class="note">2026 register figures (LobbyFacts / Integrity Watch), not 2021. All organisation types; the register-number-only sensitivity check is in money_vs_influence.csv.</p></div></div>
+      <p class="note" id="money_note">2026 register figures (LobbyFacts / Integrity Watch), not 2021. All organisation types; the register-number-only sensitivity check is in money_vs_influence.csv.</p></div></div>
   </div>
 
   <div class="card" id="battle">
@@ -165,7 +165,7 @@ a { color: var(--accent); }
   </div>
 
   <div class="card" id="tracka">
-    <h2>Track A: did the proposal take the positions organisations argued for in 2020?</h2>
+    <h2 id="tracka_h2">Track A: did the proposal take the positions organisations argued for in 2020?</h2>
     <div class="grid2"><div id="f_heat" style="height:440px"></div>
       <div><table><thead><tr><th>Type</th><th>Positions</th><th>Aligned</th><th>Random choice</th><th>Permutation 95%</th></tr></thead><tbody id="a_tb"></tbody></table>
       <p class="note">Share of coded positions that match the proposal's choice on each issue. Random choice = picking one of the issue's options at random;
@@ -175,7 +175,7 @@ a { color: var(--accent); }
   <div class="card" id="access">
     <h2>Access vs echo</h2>
     <table><thead><tr><th>Type</th><th>Echoed pairs</th><th>With a recorded meeting</th><th>Random tabling MEPs</th><th>95% interval</th></tr></thead><tbody id="ac_tb"></tbody></table>
-    <p class="note">Share of (organisation, echoed amendment) pairs where an MEP who tabled the amendment has a recorded meeting with the organisation,
+    <p class="note" id="access_note">Share of (organisation, echoed amendment) pairs where an MEP who tabled the amendment has a recorded meeting with the organisation,
     against the same organisations paired with random AI Act tabling MEPs. Meetings recorded in 2020 and Jun–Oct 2024 only: a missing meeting means "not recorded".</p>
   </div>
 
@@ -195,11 +195,35 @@ a { color: var(--accent); }
 <script id="data" type="application/json">__DATA__</script>
 <script>
 const D = JSON.parse(document.getElementById('data').textContent);
+const PROC = D.proc;
+const esc = s => (s == null ? '' : String(s)).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+if (PROC) {
+  document.title = `${PROC.short} Lobby Echoes`;
+  const h1El = document.getElementById('page_h1');
+  if (h1El) h1El.textContent = `Do lobby comments show up in the ${PROC.short}?`;
+  const subEl = document.getElementById('page_sub');
+  if (subEl) subEl.innerHTML = `Stakeholder comments on the ${esc(PROC.short)} (Have Your Say${PROC.consultation_years_sub ? ' ' + esc(PROC.consultation_years_sub) : ''}) matched against the Commission proposal (Track A) and the European Parliament committee amendments (Track B), followed through the EP report to ${esc(PROC.law)}. An <b>echo</b> is a text match above a null-calibrated threshold, judged by an LLM; it is evidence of similar wording, not proof of cause.`;
+  const fnEl = document.getElementById('funnel_note');
+  if (fnEl) {
+    const amCount = PROC.base_amendments ? Number(PROC.base_amendments).toLocaleString('en-US') : 'all';
+    fnEl.innerHTML = `Share of echoed amendments that survived into the EP report (${esc(PROC.report_date_label || PROC.report_date)}) and reached the final law, by the type of organisation whose comment they echo, against the base rate of all ${amCount} committee amendments. Judged echoes only (tiers T1/T2). Per-echo counting gives more weight to amendments echoed by many paragraphs.`;
+  }
+  const cnEl = document.getElementById('carriers_note');
+  if (cnEl && !PROC.is_default) cnEl.textContent = 'Meetings = recorded Integrity Watch meetings between the two.';
+  const mnEl = document.getElementById('money_note');
+  if (mnEl && !PROC.is_default) mnEl.textContent = 'Register figures (LobbyFacts / Integrity Watch). All organisation types; the register-number-only sensitivity check is in money_vs_influence.csv.';
+  const th2El = document.getElementById('tracka_h2');
+  if (th2El) th2El.textContent = `Track A: did the proposal take the positions organisations argued for in ${PROC.track_a_year || '2020'}?`;
+  const anEl = document.getElementById('access_note');
+  if (anEl) {
+    const meetCov = PROC.is_default ? 'Meetings recorded in 2020 and Jun–Oct 2024 only: a missing meeting means "not recorded".' : 'Meetings recorded: a missing meeting means "not recorded".';
+    anEl.textContent = `Share of (organisation, echoed amendment) pairs where an MEP who tabled the amendment has a recorded meeting with the organisation, against the same organisations paired with random ${PROC.short} tabling MEPs. ${meetCov}`;
+  }
+}
 const PROXY = 'http://localhost:8765';
 const css = v => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
 const TYPES = ['NGO','COMPANY','BUSINESS_ASSOCIATION','TRADE_UNION','CONSUMER_ORGANISATION'];
 const tcol = t => css('--c' + Math.max(0, TYPES.indexOf(t) >= 0 ? TYPES.indexOf(t) : 5));
-const esc = s => (s == null ? '' : String(s)).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const pct = x => x == null || isNaN(x) ? '–' : (100 * x).toFixed(1) + '%';
 const fmt = x => x == null || x === '' ? '–' : (typeof x === 'number' ? x.toLocaleString() : x);
 function layout(extra) {
@@ -322,7 +346,7 @@ o_q.onchange = () => {
   o_card.className = '';
   o_card.innerHTML = `<div class="grid2"><div><h2>${esc(o.name)}</h2><div class="kv">
     <div>Type</div><div>${esc(o.user_type)} · ${esc(o.country)}</div>
-    <div>Commented on</div><div>${(o.tracks || []).map(t => t === 'A' ? '2020 inception (A)' : '2021 proposal (B)').join(', ')}</div>
+    <div>Commented on</div><div>${(o.tracks || []).map(t => t === 'A' ? (PROC && !PROC.is_default ? PROC.track_a_short : '2020 inception (A)') : (PROC && !PROC.is_default ? PROC.track_b_short : '2021 proposal (B)')).join(', ')}</div>
     <div>Register match</div><div>${esc(o.match_method)}${o.register_name ? ' · ' + esc(o.register_name) : ''}</div>
     <div>Lobbying cost</div><div>${o.cost != null ? '€' + Math.round(o.cost).toLocaleString() + (o.cost_range ? ' (band midpoint)' : '') : '–'}</div>
     <div>FTE · EP passes</div><div>${fmt(o.fte)} · ${fmt(o.ep_passes)}</div>
@@ -330,15 +354,15 @@ o_q.onchange = () => {
     <div>MEP meetings (register)</div><div>${fmt(o.mep_meetings_register)}</div>
     <div>Registered since</div><div>${fmt(o.reg_date)}</div>
     ${o.lobbyfacts_url ? `<div>LobbyFacts</div><div><a href="${esc(o.lobbyfacts_url)}" target="_blank">datacard</a></div>` : ''}
-  </div><p class="note">Register figures are 2026, not 2021.</p></div>
+  </div><p class="note">${PROC && !PROC.is_default ? 'Register figures (LobbyFacts / Integrity Watch).' : 'Register figures are 2026, not 2021.'}</p></div>
   <div><div class="kv"><div>Influence score</div><div>${(+o.influence).toFixed(1)}</div>
     <div>Echoes by tier</div><div>T1 ${o.t1} · T2 ${o.t2} · T3 ${o.t3}</div>
     <div>Echoed amendments in law</div><div>${o.echoed_amendments_in_law}</div>
     <div>Coalition</div><div>${fmt(o.coalition)}</div>
-    <div>Recorded MEP meetings</div><div>${o.meetings} (${o.ai_meetings} about AI)</div>
+    <div>Recorded MEP meetings</div><div>${o.meetings} (${o.ai_meetings} about ${esc(PROC ? PROC.topic : 'AI')})</div>
     <div>MEPs met</div><div>${(o.meps_met || []).map(esc).join(', ') || '–'}</div>
     <div>Track A positions</div><div>${(o.positions || []).map(esc).join('<br>') || '–'}</div></div>
-    <p class="note">Meetings: Integrity Watch, 2020 and Jun–Oct 2024 only.</p></div></div>`;
+    <p class="note">${PROC && !PROC.is_default ? 'Meetings: Integrity Watch.' : 'Meetings: Integrity Watch, 2020 and Jun–Oct 2024 only.'}</p></div></div>`;
 };
 
 // tables
@@ -355,7 +379,7 @@ tb('m_tb', D.money_stats.filter(r => r.user_type === 'ALL' && r.sample === 'all 
   const traces = TYPES.map(t => { const r = D.money.filter(m => m.user_type === t && m.lobbying_cost_eur > 0);
     return {type: 'scatter', mode: 'markers', name: t, x: r.map(m => m.lobbying_cost_eur), y: r.map(m => m.influence), text: r.map(m => m.name),
       hovertemplate: '%{text}<br>€%{x:,.0f}<br>influence %{y:.0f}<extra></extra>', marker: {color: tcol(t), size: 8, opacity: .8}}; });
-  Plotly.newPlot('f_money', traces, layout({height: 420, xaxis: {type: 'log', title: 'lobbying cost, € (2026 register, log)', gridcolor: css('--grid')},
+  Plotly.newPlot('f_money', traces, layout({height: 420, xaxis: {type: 'log', title: (PROC && !PROC.is_default ? 'lobbying cost, € (register, log)' : 'lobbying cost, € (2026 register, log)'), gridcolor: css('--grid')},
     yaxis: {title: 'influence score (Track B)', gridcolor: css('--grid')}}), CFG);
 })();
 
@@ -394,19 +418,25 @@ ask_go.onclick = async () => {
 (function () {
   const C = D.coverage, th = C.thresholds || {};
   const b = th.s08 && th.s08.B || {}, a = th.s08 && th.s08.A || {};
+  const trLine = PROC ? `A: ${esc(PROC.is_default ? '2020 inception comments' : (PROC.track_a_comments_label || PROC.track_a_label || 'Track A'))} → Commission proposal · B: ${esc(PROC.is_default ? '2021 comments' : (PROC.track_b_comments_label || PROC.track_b_label || 'Track B'))} → EP committee amendments → EP report → ${esc(PROC.law_short || 'Regulation 2024/1689')}` : 'A: 2020 inception comments → Commission proposal · B: 2021 comments → EP committee amendments → EP report → Regulation 2024/1689';
+  const thLine = `99th percentile of the same chunks scored against ${esc(PROC ? PROC.null_short : 'DSA')} amendments: A ${(+a.tau_match || 0).toFixed(2)}, B ${(+b.tau_match || 0).toFixed(2)}; verbatim null hit rate B ${(100 * (b.null_verbatim_rate || 0)).toFixed(3)}%`;
+  const regLine = PROC && !PROC.is_default ? 'Snapshot from LobbyFacts, Integrity Watch' : '2026 snapshot (LobbyFacts, Integrity Watch), not 2021';
+  const meetLine = `${C.orgs_with_meetings} of ${C.orgs} organisations with ≥1 recorded meeting; ${PROC && !PROC.is_default ? 'data from Integrity Watch' : 'data covers 2020 and Jun–Oct 2024 only'}`;
+  const finalLine = PROC ? PROC.final_act_coverage : 'articles from the 2026-07-27 consolidation (M1 changes flagged), recitals and "as adopted" text from the 2024 OJ';
+  const caveatSources = PROC ? PROC.shared_sources : 'HLEG, OECD, White Paper';
   cov.innerHTML = `<div class="grid2"><div class="kv">
-    <div>Tracks</div><div>A: 2020 inception comments → Commission proposal · B: 2021 comments → EP committee amendments → EP report → Regulation 2024/1689</div>
+    <div>Tracks</div><div>${trLine}</div>
     <div>Matching</div><div>embeddings (${esc(C.models.embeddings)}), TF-IDF, 3-gram overlap; proposal 6-grams and widely quoted 12-grams masked</div>
-    <div>Threshold</div><div>99th percentile of the same chunks scored against DSA amendments: A ${(+a.tau_match || 0).toFixed(2)}, B ${(+b.tau_match || 0).toFixed(2)}; verbatim null hit rate B ${(100 * (b.null_verbatim_rate || 0)).toFixed(3)}%</div>
+    <div>Threshold</div><div>${thLine}</div>
     <div>Judge</div><div>${esc(C.models.judge)} (second opinion ${esc(C.models.second)}); ${Object.entries(C.judged_pairs).map(([k, v]) => k + ': ' + v + ' pairs').join(', ')}</div>
     <div>Tiers</div><div>T1 verbatim and implements · T2 verbatim, or implements / partial · T3 above threshold only</div>
   </div><div class="kv">
     <div>Register matches</div><div>${Object.entries(C.match_methods).map(([k, v]) => esc(k) + ' ' + v).join(' · ')}</div>
-    <div>Register figures</div><div>2026 snapshot (LobbyFacts, Integrity Watch), not 2021</div>
-    <div>MEP meetings</div><div>${C.orgs_with_meetings} of ${C.orgs} organisations with ≥1 recorded meeting; data covers 2020 and Jun–Oct 2024 only</div>
-    <div>Final act</div><div>articles from the 2026-07-27 consolidation (M1 changes flagged), recitals and "as adopted" text from the 2024 OJ</div>
+    <div>Register figures</div><div>${regLine}</div>
+    <div>MEP meetings</div><div>${meetLine}</div>
+    <div>Final act</div><div>${finalLine}</div>
     <div>Placeholder sources</div><div>${C.degraded_sources.length ? C.degraded_sources.map(esc).join(', ') : 'none'}</div>
-    <div>Caveat</div><div>Similarity is not causation: shared outside sources (HLEG, OECD, White Paper) and coalition texts produce echoes too.</div>
+    <div>Caveat</div><div>Similarity is not causation: shared outside sources (${esc(caveatSources)}) and coalition texts produce echoes too.</div>
   </div></div>`;
 })();
 </script>

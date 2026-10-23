@@ -14,6 +14,7 @@ import json
 import logging
 import re
 from collections import Counter
+from datetime import datetime
 from pathlib import Path
 
 import networkx as nx
@@ -22,11 +23,98 @@ import pandas as pd
 
 from . import config, graph, sources
 
+PROCEDURE_AWARE = True  # reads everything from config.PROC
+
 log = logging.getLogger("s11")
 R = config.RESULTS
 TEMPLATE = Path(__file__).with_name("dashboard_template.html")
 ECHO = "e.tier IN ['T1','T2'] AND NOT coalesce(e.hidden, false)"
 N_PAIRS = 500
+
+
+def _proc_info(dashboard: bool = True) -> dict:
+    is_default = config.PROCEDURE_ID == config.DEFAULT_PROCEDURE
+    proposal = config.PROC.get("texts", {}).get("proposal") or {}
+    final = config.PROC.get("texts", {}).get("final") or {}
+    parl = config.PROC.get("parliament") or {}
+    report = parl.get("report") or {}
+    shared = config.PROC.get("analysis", {}).get("shared_sources") or {}
+    wording = config.PROC.get("wording") or {}
+    consultation = config.PROC.get("consultation") or {}
+    c_a = consultation.get("A") or {}
+    c_b = consultation.get("B") or {}
+
+    years = []
+    for c_info in (c_a, c_b):
+        if isinstance(c_info, dict) and c_info.get("label"):
+            m = re.search(r"\b(20\d\d)\b", c_info["label"])
+            if m and m.group(1) not in years:
+                years.append(m.group(1))
+    consultation_years = " + ".join(years) if years else ("2020 + 2021" if is_default else "")
+
+    final_date = final.get("date") or ""
+    final_year = final_date[:4] if final_date else ("2024" if is_default else "")
+
+    report_date = report.get("date") or ""
+    report_date_label = report_date
+    if re.fullmatch(r"\d{4}-\d{2}", report_date):
+        try:
+            dt = datetime.strptime(report_date, "%Y-%m")
+            report_date_label = dt.strftime("%B %Y")
+        except Exception:
+            pass
+
+    null_proc = config.PROC.get("null_procedure") or ""
+    null_short = "DSA" if is_default else ("AI Act" if null_proc == "2021/0106(COD)" else null_proc)
+
+    final_act_coverage = (
+        f"articles from the {final.get('consolidated_date')} consolidation (M1 changes flagged), recitals and \"as adopted\" text from the {final_year} OJ"
+        if final.get("consolidated_date")
+        else f"articles and recitals from the {final_year} OJ"
+    )
+
+    law = config.PROC.get("law") or ""
+    law_short = law.replace("(EU) ", "") if "(EU) " in law else law
+
+    m_a = re.search(r"\b(20\d\d)\b", c_a.get("label", "")) if isinstance(c_a, dict) else None
+    m_b = re.search(r"\b(20\d\d)\b", c_b.get("label", "")) if isinstance(c_b, dict) else None
+
+    return {
+        "id": config.PROC.get("id"),
+        "procedure": config.PROC.get("procedure"),
+        "title": config.PROC.get("title"),
+        "short": config.PROC.get("short"),
+        "law": law,
+        "law_short": law_short,
+        "proposal_ref": proposal.get("ref"),
+        "proposal_date": proposal.get("date"),
+        "final_date": final_date,
+        "final_year": final_year,
+        "unit_prefix": final.get("unit_prefix"),
+        "consolidated": final.get("consolidated"),
+        "consolidated_date": final.get("consolidated_date"),
+        "final_act_coverage": final_act_coverage,
+        "report_id": report.get("id"),
+        "report_date": report_date,
+        "report_date_label": report_date_label,
+        "rapporteurs": parl.get("rapporteurs") or [],
+        "term": parl.get("term") or [],
+        "null_procedure": null_proc,
+        "null_short": null_short,
+        "track_a_label": c_a.get("label") or ("2020 inception impact assessment" if is_default else "Track A"),
+        "track_b_label": c_b.get("label") or ("2021 feedback on the proposal" if is_default else "Track B"),
+        "track_a_short": "2020 inception (A)" if is_default else (c_a.get("label") or "Track A"),
+        "track_b_short": "2021 proposal (B)" if is_default else (c_b.get("label") or "Track B"),
+        "track_a_year": m_a.group(1) if m_a else "2020",
+        "track_b_year": m_b.group(1) if m_b else "2021",
+        "featured_article": (config.PROC.get("analysis") or {}).get("featured_article"),
+        "shared_sources": shared.get("dashboard" if dashboard else "demo") or ("HLEG, OECD, White Paper" if is_default else ""),
+        "topic": wording.get("topic") or ("AI" if is_default else config.PROC.get("short", "")),
+        "consultation_years": consultation_years,
+        "consultation_years_sub": consultation_years.replace(" + ", " and "),  # subtitle wording: "2020 and 2021"
+        "base_amendments": config.PROC.get("expect", {}).get("committee_amendments"),
+        "is_default": is_default,
+    }
 
 
 def csv(name: str) -> pd.DataFrame:
@@ -98,14 +186,18 @@ def tiles() -> list[dict]:
                   "sum(CASE WHEN e.verbatim THEN 1 ELSE 0 END) AS v")[0]
     f = csv("02_reach_funnel")
     base = f[f.user_type.str.startswith("ALL")].iloc[0]
+    info = _proc_info(dashboard=True)
+    c_label = f"consultation comments ({info['consultation_years']})" if info["consultation_years"] else "consultation comments"
+    final_yr = info["final_year"]
+    l_label = f"of all amendments reached the {final_yr} law" if final_yr else "of all amendments reached the final law"
     return [
-        {"v": f"{c['nodes'].get('Comment', 0):,}", "l": "consultation comments (2020 + 2021)"},
+        {"v": f"{c['nodes'].get('Comment', 0):,}", "l": c_label},
         {"v": f"{c['nodes'].get('Organisation', 0):,}", "l": "organisations"},
         {"v": f"{c['nodes'].get('Amendment', 0):,}", "l": "committee amendments"},
         {"v": f"{e['n']:,}", "l": "judged echoes (T1/T2)"},
         {"v": f"{e['v']:,}", "l": "verbatim echoes (12+ identical words)"},
         {"v": f"{base.amendment_share_survived:.1%}", "l": "of all amendments survived into the EP report"},
-        {"v": f"{base.amendment_share_reached_law:.1%}", "l": "of all amendments reached the 2024 law"},
+        {"v": f"{base.amendment_share_reached_law:.1%}", "l": l_label},
     ]
 
 
@@ -254,28 +346,39 @@ def coverage() -> dict:
     }
 
 
-PREPARED = [
-    dict(q="Which organisations' wording reached the final law most often?",
-         cypher=f"""MATCH (o:Organisation)-[:SUBMITTED]->(:Comment)<-[:PART_OF]-(:Chunk)-[e:ECHOED_IN]->(a:Amendment)
+def get_prepared() -> list[dict]:
+    items = [
+        dict(q="Which organisations' wording reached the final law most often?",
+             cypher=f"""MATCH (o:Organisation)-[:SUBMITTED]->(:Comment)<-[:PART_OF]-(:Chunk)-[e:ECHOED_IN]->(a:Amendment)
 WHERE {ECHO} AND a.reached_law
 RETURN o.name AS organisation, o.user_type AS type, count(DISTINCT a) AS amendments_in_law
 ORDER BY amendments_in_law DESC LIMIT 15"""),
-    dict(q="Which MEPs tabled the most amendments echoing NGOs vs companies?",
-         cypher=f"""MATCH (o:Organisation)-[:SUBMITTED]->(:Comment)<-[:PART_OF]-(:Chunk)-[e:ECHOED_IN]->(a:Amendment)<-[:TABLED]-(m:MEP)
+        dict(q="Which MEPs tabled the most amendments echoing NGOs vs companies?",
+             cypher=f"""MATCH (o:Organisation)-[:SUBMITTED]->(:Comment)<-[:PART_OF]-(:Chunk)-[e:ECHOED_IN]->(a:Amendment)<-[:TABLED]-(m:MEP)
 WHERE {ECHO} AND o.user_type IN ['NGO','COMPANY']
 RETURN m.name AS mep, o.user_type AS type, count(DISTINCT a) AS amendments
 ORDER BY amendments DESC LIMIT 15"""),
-    dict(q="Where do industry and NGOs pull Article 5 in opposite directions?",
-         cypher=f"""MATCH (o:Organisation)-[:SUBMITTED]->(:Comment)<-[:PART_OF]-(:Chunk)-[e:ECHOED_IN]->(a:Amendment)-[:AMENDS]->(p:Provision)
-WHERE {ECHO} AND p.article = 'Art5' AND e.llm_direction IN ['strengthens','weakens']
+    ]
+    feat_art = (config.PROC.get("analysis") or {}).get("featured_article")
+    if feat_art:
+        art_label = re.sub(r"^Art(\d+)$", r"Article \1", feat_art) if feat_art.startswith("Art") else feat_art
+        items.append(
+            dict(q=f"Where do industry and NGOs pull {art_label} in opposite directions?",
+                 cypher=f"""MATCH (o:Organisation)-[:SUBMITTED]->(:Comment)<-[:PART_OF]-(:Chunk)-[e:ECHOED_IN]->(a:Amendment)-[:AMENDS]->(p:Provision)
+WHERE {ECHO} AND p.article = '{feat_art}' AND e.llm_direction IN ['strengthens','weakens']
 RETURN p.unit_id AS provision, o.user_type AS type, e.llm_direction AS direction, count(*) AS echoes
-ORDER BY provision, echoes DESC LIMIT 40"""),
-]
+ORDER BY provision, echoes DESC LIMIT 40""")
+        )
+    return items
+
+
+PREPARED = get_prepared()
 
 
 def build_data() -> dict:
-    prepared = [dict(**p, rows=json.loads(json.dumps(graph.run(p["cypher"]), default=str))) for p in PREPARED]
+    prepared = [dict(**p, rows=json.loads(json.dumps(graph.run(p["cypher"]), default=str))) for p in get_prepared()]
     return {
+        "proc": _proc_info(dashboard=True),
         "tiles": tiles(),
         "funnel": records(csv("02_reach_funnel")),
         "network": network(),
