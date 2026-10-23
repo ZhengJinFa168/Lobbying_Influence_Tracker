@@ -205,8 +205,8 @@ if (PROC) {
   if (subEl) subEl.innerHTML = `Stakeholder comments on the ${esc(PROC.short)} (Have Your Say${PROC.consultation_years_sub ? ' ' + esc(PROC.consultation_years_sub) : ''}) matched against the Commission proposal (Track A) and the European Parliament committee amendments (Track B), followed through the EP report to ${esc(PROC.law)}. An <b>echo</b> is a text match above a null-calibrated threshold, judged by an LLM; it is evidence of similar wording, not proof of cause.`;
   const fnEl = document.getElementById('funnel_note');
   if (fnEl) {
-    const amCount = PROC.base_amendments ? Number(PROC.base_amendments).toLocaleString('en-US') : 'all';
-    fnEl.innerHTML = `Share of echoed amendments that survived into the EP report (${esc(PROC.report_date_label || PROC.report_date)}) and reached the final law, by the type of organisation whose comment they echo, against the base rate of all ${amCount} committee amendments. Judged echoes only (tiers T1/T2). Per-echo counting gives more weight to amendments echoed by many paragraphs.`;
+    const amCount = PROC.base_amendments ? Number(PROC.base_amendments).toLocaleString('en-US') + ' ' : '';
+    fnEl.innerHTML = `Share of echoed amendments that survived into the EP report (${esc(PROC.report_date_label || PROC.report_date)}) and reached the final law, by the type of organisation whose comment they echo, against the base rate of all ${amCount}committee amendments. Judged echoes only (tiers T1/T2). Per-echo counting gives more weight to amendments echoed by many paragraphs.`;
   }
   const cnEl = document.getElementById('carriers_note');
   if (cnEl && !PROC.is_default) cnEl.textContent = 'Meetings = recorded Integrity Watch meetings between the two.';
@@ -346,7 +346,7 @@ o_q.onchange = () => {
   o_card.className = '';
   o_card.innerHTML = `<div class="grid2"><div><h2>${esc(o.name)}</h2><div class="kv">
     <div>Type</div><div>${esc(o.user_type)} · ${esc(o.country)}</div>
-    <div>Commented on</div><div>${(o.tracks || []).map(t => t === 'A' ? (PROC && !PROC.is_default ? PROC.track_a_short : '2020 inception (A)') : (PROC && !PROC.is_default ? PROC.track_b_short : '2021 proposal (B)')).join(', ')}</div>
+    <div>Commented on</div><div>${(o.tracks || []).map(t => t === 'A' ? (PROC && !PROC.is_default ? esc(PROC.track_a_short) : '2020 inception (A)') : (PROC && !PROC.is_default ? esc(PROC.track_b_short) : '2021 proposal (B)')).join(', ')}</div>
     <div>Register match</div><div>${esc(o.match_method)}${o.register_name ? ' · ' + esc(o.register_name) : ''}</div>
     <div>Lobbying cost</div><div>${o.cost != null ? '€' + Math.round(o.cost).toLocaleString() + (o.cost_range ? ' (band midpoint)' : '') : '–'}</div>
     <div>FTE · EP passes</div><div>${fmt(o.fte)} · ${fmt(o.ep_passes)}</div>
@@ -434,7 +434,7 @@ ask_go.onclick = async () => {
     <div>Register matches</div><div>${Object.entries(C.match_methods).map(([k, v]) => esc(k) + ' ' + v).join(' · ')}</div>
     <div>Register figures</div><div>${regLine}</div>
     <div>MEP meetings</div><div>${meetLine}</div>
-    <div>Final act</div><div>${finalLine}</div>
+    <div>Final act</div><div>${esc(finalLine)}</div>
     <div>Placeholder sources</div><div>${C.degraded_sources.length ? C.degraded_sources.map(esc).join(', ') : 'none'}</div>
     <div>Caveat</div><div>Similarity is not causation: shared outside sources (${esc(caveatSources)}) and coalition texts produce echoes too.</div>
   </div></div>`;

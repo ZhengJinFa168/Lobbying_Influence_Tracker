@@ -17,6 +17,7 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
+import yaml
 
 from . import config, graph, sources
 
@@ -29,6 +30,15 @@ ECHO = "e.tier IN ['T1','T2'] AND NOT coalesce(e.hidden, false)"
 RAPPORTEURS = set((config.PROC.get("parliament") or {}).get("rapporteurs") or [])
 TERM = tuple((config.PROC.get("parliament") or {}).get("term") or ["2019-07-02", "2024-07-15"])
 
+
+
+def _short_of(procedure: str) -> str:
+    """Short name of another procedure from data_sources/procedures/*.yaml, else its reference."""
+    for f in sorted(config.PROCEDURES_DIR.glob("*.yaml")):
+        d = yaml.safe_load(f.read_text(encoding="utf-8")) or {}
+        if isinstance(d, dict) and d.get("procedure") == procedure and d.get("short"):
+            return d["short"]
+    return procedure
 
 def _term_leg(term: tuple | list) -> str:
     if term and len(term) >= 1 and str(term[0]).startswith("2019"):
@@ -104,7 +114,7 @@ def _build_acts() -> list[dict]:
     term_years = f"{term_start}–{term_end}"
 
     null_proc = config.PROC.get("null_procedure") or ""
-    null_short = "DSA" if is_default else ("AI Act" if null_proc == "2021/0106(COD)" else null_proc)
+    null_short = "DSA" if is_default else _short_of(null_proc)
     null_short_label = f"the {null_short}"
 
     consolidated_label = (
@@ -165,7 +175,7 @@ def _build_acts() -> list[dict]:
         track_a_year=t_a_year,
         track_b_year=t_b_year,
         amendment_year=amendment_year,
-        consultation_sub=f"{t_a_year} inception + {t_b_year} proposal" if (t_a_year and t_b_year) else "consultation comments",
+        consultation_sub=f"{t_a_year} inception + {t_b_year} proposal" if {"A", "B"} <= set(config.PUB_IDS) else "consultation comments",
         consultation_sources=(
             "2020 inception impact assessment, 2021 proposal"
             if is_default
@@ -186,7 +196,8 @@ def _build_acts() -> list[dict]:
         ),
         search_hint="try “Art 5”, “Twilio”, “Benifei”, “Greens”" if is_default else "try “Article”, “Company”, “MEP”, “Group”",
         filter_placeholder="Filter: “Article 5”, “biometric”, “sandbox”…" if is_default else "Filter by keyword…",
-        register_year="2026" if is_default else "",
+        register_year="2026",  # LobbyFacts / Integrity Watch snapshot, shared by all procedures
+        judge_cap=config.LLM_MAX_PAIRS_PER_TRACK,  # strongest Track B echoes sent to the LLM judge
         is_default=is_default,
     )
     others = [dict(**a, ready=False) for a in _ALL_KNOWN_ACTS if a["id"] != curr_proc]

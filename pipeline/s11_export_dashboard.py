@@ -20,6 +20,7 @@ from pathlib import Path
 import networkx as nx
 import numpy as np
 import pandas as pd
+import yaml
 
 from . import config, graph, sources
 
@@ -31,6 +32,15 @@ TEMPLATE = Path(__file__).with_name("dashboard_template.html")
 ECHO = "e.tier IN ['T1','T2'] AND NOT coalesce(e.hidden, false)"
 N_PAIRS = 500
 
+
+
+def _short_of(procedure: str) -> str:
+    """Short name of another procedure from data_sources/procedures/*.yaml, else its reference."""
+    for f in sorted(config.PROCEDURES_DIR.glob("*.yaml")):
+        d = yaml.safe_load(f.read_text(encoding="utf-8")) or {}
+        if isinstance(d, dict) and d.get("procedure") == procedure and d.get("short"):
+            return d["short"]
+    return procedure
 
 def _proc_info(dashboard: bool = True) -> dict:
     is_default = config.PROCEDURE_ID == config.DEFAULT_PROCEDURE
@@ -65,7 +75,7 @@ def _proc_info(dashboard: bool = True) -> dict:
             pass
 
     null_proc = config.PROC.get("null_procedure") or ""
-    null_short = "DSA" if is_default else ("AI Act" if null_proc == "2021/0106(COD)" else null_proc)
+    null_short = "DSA" if is_default else _short_of(null_proc)
 
     final_act_coverage = (
         f"articles from the {final.get('consolidated_date')} consolidation (M1 changes flagged), recitals and \"as adopted\" text from the {final_year} OJ"

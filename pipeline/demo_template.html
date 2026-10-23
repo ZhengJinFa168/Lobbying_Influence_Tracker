@@ -429,7 +429,7 @@ function lobbyPage(id) {
       <div>Head office</div><div>${esc(o.head_office || o.country || '–')}</div><div>Size</div><div>${esc(o.size || '–')}</div></div>
       <div class="chips mt">${(o.fields || []).map(f => `<span class="chip">${esc(f)}</span>`).join('') || '<span class="muted small">no fields of interest declared</span>'}</div></div>
   </div>
-  <div class="section-title" id="sec-said"><h2>What they said</h2><span class="muted small">${comm.map(c => `<a href="${esc(c.url)}" target="_blank" rel="noopener">${c.track === 'A' ? (ACT.track_a_short || '2020 inception comment') : (ACT.track_b_short || '2021 proposal comment')} (${esc(c.date)}) ↗</a>`).join(' · ')}</span></div>
+  <div class="section-title" id="sec-said"><h2>What they said</h2><span class="muted small">${comm.map(c => `<a href="${esc(c.url)}" target="_blank" rel="noopener">${c.track === 'A' ? (esc(ACT.track_a_short) || '2020 inception comment') : (esc(ACT.track_b_short) || '2021 proposal comment')} (${esc(c.date)}) ↗</a>`).join(' · ')}</span></div>
   <div class="grid g2">
     <div class="card"><h3>Their words that came back</h3>${best.slice(0, 3).map(([s, i]) => `<div style="margin-bottom:14px"><div class="textbox quote">“${highlight(trunc(s.chunk, 330), s.added)}”</div>
       <div class="small mt" style="margin-top:6px">→ <a href="#/story/${i}">${esc(s.location)}</a> · ${outcomeBadges(s)}</div></div>`).join('') || '<div class="empty">No judged echo in a committee amendment.</div>'}</div>
@@ -636,7 +636,7 @@ function methodPage() {
     <li>Register figures (spend, staff, passes, meetings) are today's${ACT.proposal_year ? ", not " + esc(ACT.proposal_year) + "'s" : ''}. Unmatched organisations have no spend, never zero.</li>
     <li>${esc(ACT.meeting_caveat || "Meeting records cover 2020 and June–October 2024 only; nothing covers the 2022–2023 amendment period.")}</li>
     <li>Only ${num(Object.values(D.lobbies).filter(o => o.match_method !== 'none').length)} of ${num(LOBBIES.length)} organisations could be matched to the register automatically.</li>
-    <li>The AI judge saw ${num((D.thresholds.s08?.B?.echoes) ? 2000 : 0)} of the bill-stage matches (the strongest); the rest stay at tier T3.</li></ul></div>
+    <li>The AI judge saw ${num(Math.min(ACT.judge_cap || 2000, D.thresholds.s08?.B?.echoes || 0))} of the bill-stage matches (the strongest); the rest stay at tier T3.</li></ul></div>
   <p class="footer">Built from the hackathonReversa pipeline · ${esc(ACT.id)}</p>`;
 }
 function notFound() { app.innerHTML = '<h1>Not found</h1><p><a href="#/">Back to the overview</a></p>'; }
