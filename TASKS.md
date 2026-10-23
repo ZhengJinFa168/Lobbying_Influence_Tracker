@@ -20,6 +20,7 @@ Status: `Todo` · `In progress` · `In review` · `Blocked` · `Done`
 | DSA W5: matching and threshold (null procedure from config) | `pipeline/s05_features.py`, `pipeline/s07_match.py`, `pipeline/s08_calibrate.py` | Gemini 3.8 Flash High (coder), Claude (review, merge) | `feat/dsa-w5-matching` | Done (merged) | AI Act regression passed against a base-branch run on a throwaway Neo4j |
 | DSA W6: demo and dashboard text from config | `pipeline/s11_export_dashboard.py`, `pipeline/s11b_demo.py`, `pipeline/*_template.html`, `pipeline/serve.py` | Gemini 3.8 Flash High (coder), Claude (review, merge) | `feat/dsa-w6-demo` | Done (merged) | AI Act regression passed against a base-branch run on a throwaway Neo4j |
 | Echo rule O2: T2 = implements, or partial only when verbatim; old rule kept as a sensitivity output; README numbers updated | `pipeline/s08_calibrate.py`, `pipeline/s09_judge_and_stance.py`, `pipeline/s10_analyse.py`, `neo4j/queries/02b_*.cypher`, templates, docs, `README.md` | Luigi Zheng (Claude) | `feat/dsa-step0` | Done | owner-approved 2026-10-23; changes published AI Act findings; no new LLM calls |
+| Clear the boundary debt: move shared stage helpers into shared modules so `tach check` passes; bump CI actions | `pipeline/s05..s12`, `serve.py`, new shared modules, `tach.toml`, `.github/workflows/boundaries.yml` | Luigi Zheng (Claude) | `fix/boundary-debt` | In progress | owner-approved; AI Act output must stay identical |
 | | | | | | |
 
 ## Module owners
