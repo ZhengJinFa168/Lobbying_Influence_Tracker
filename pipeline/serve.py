@@ -24,21 +24,23 @@ from . import s09_judge_and_stance as s09
 PORT = 8765
 _pairs: dict[str, pd.DataFrame] = {}
 
-SCHEMA_TEXT = """Neo4j graph about lobbying on the EU AI Act (procedure 2021/0106(COD)).
+_unit_prefix = (config.PROC.get("texts", {}).get("final") or {}).get("unit_prefix") or "2024/1689"
+
+SCHEMA_TEXT = f"""Neo4j graph about lobbying on the EU {config.PROC['short']} (procedure {config.PROC['procedure']}).
 Nodes (key): Organisation(org_id; name, user_type in [COMPANY, BUSINESS_ASSOCIATION, NGO, TRADE_UNION,
 CONSUMER_ORGANISATION], country, lobbying_cost_eur, fte, ep_passes_all, ec_meetings_vdl1, mep_meetings_all,
 influence_b, coalition), Comment(feedback_id; track 'A' or 'B', date), Chunk(chunk_id; text),
 Provision(unit_id like 'Art5(1)(d)', 'Rec27', 'AnnexIII(1)(5)(b)'; text, article), Amendment(am_id; location,
 added_text, committee, survived, reached_law, survival_score), AdoptedAmendment(adopted_id; text),
-LegalUnit(law_unit_id like '2024/1689:Art5(1)(h)'; text), MEP(mep_id; name, country, iw_group),
+LegalUnit(law_unit_id like '{_unit_prefix}:Art5(1)(h)'; text), MEP(mep_id; name, country, iw_group),
 Group(group_id in [PPE, S&D, RE, Verts/ALE, ID, ECR, GUE/NGL, NA]), Committee(code), Issue(issue_id; proposal_choice).
 Relationships: (Organisation)-[:SUBMITTED]->(Comment), (Chunk)-[:PART_OF]->(Comment),
-(Comment)-[:CITES]->(Provision), (Amendment)-[:AMENDS]->(Provision), (MEP)-[:TABLED {weight, is_lead_author}]->(Amendment),
+(Comment)-[:CITES]->(Provision), (Amendment)-[:AMENDS]->(Provision), (MEP)-[:TABLED {{weight, is_lead_author}}]->(Amendment),
 (MEP)-[:MEMBER_OF]->(Group), (Amendment)-[:IN_COMMITTEE]->(Committee),
-(Amendment)-[:SURVIVED_AS {score}]->(AdoptedAmendment), (Provision|AdoptedAmendment)-[:BECAME]->(LegalUnit),
-(Chunk)-[:ECHOED_IN {score, verbatim, tier in [T1,T2,T3], llm_relation, llm_direction, overlap_quote, hidden,
-carrier_met}]->(Provision|Amendment), (Organisation)-[:MET_WITH {date, title, period, ai_related, mep_role}]->(MEP),
-(Organisation)-[:TOOK_POSITION {stance, aligned}]->(Issue), (Chunk)-[:SIMILAR_TO]->(Chunk).
+(Amendment)-[:SURVIVED_AS {{score}}]->(AdoptedAmendment), (Provision|AdoptedAmendment)-[:BECAME]->(LegalUnit),
+(Chunk)-[:ECHOED_IN {{score, verbatim, tier in [T1,T2,T3], llm_relation, llm_direction, overlap_quote, hidden,
+carrier_met}}]->(Provision|Amendment), (Organisation)-[:MET_WITH {{date, title, period, ai_related, mep_role}}]->(MEP),
+(Organisation)-[:TOOK_POSITION {{stance, aligned}}]->(Issue), (Chunk)-[:SIMILAR_TO]->(Chunk).
 Default to echoes with tier IN ['T1','T2'] and NOT coalesce(hidden,false)."""
 CYPHER_SCHEMA = {"type": "object", "properties": {"cypher": {"type": "string"}}, "required": ["cypher"],
                  "additionalProperties": False}

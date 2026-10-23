@@ -11,26 +11,200 @@ from __future__ import annotations
 
 import json
 import logging
+import re
+from datetime import datetime
 from pathlib import Path
 
 import numpy as np
 import pandas as pd
+import yaml
 
 from . import config, graph, sources
-from .s10b_reach_model import RAPPORTEURS
+
+PROCEDURE_AWARE = True  # reads everything from config.PROC
 
 log = logging.getLogger("s11b")
 R = config.RESULTS
 TEMPLATE = Path(__file__).with_name("demo_template.html")
 ECHO = "e.tier IN ['T1','T2'] AND NOT coalesce(e.hidden, false)"
-TERM = ("2019-07-02", "2024-07-15")
+RAPPORTEURS = set((config.PROC.get("parliament") or {}).get("rapporteurs") or [])
+TERM = tuple((config.PROC.get("parliament") or {}).get("term") or ["2019-07-02", "2024-07-15"])
 
-ACTS = [
-    dict(id="2021/0106(COD)", name="Artificial Intelligence Act", short="AI Act", law="Regulation (EU) 2024/1689", ready=True),
-    dict(id="2020/0361(COD)", name="Digital Services Act", short="DSA", law="Regulation (EU) 2022/2065", ready=False),
-    dict(id="2020/0374(COD)", name="Digital Markets Act", short="DMA", law="Regulation (EU) 2022/1925", ready=False),
-    dict(id="2022/0140(COD)", name="European Health Data Space", short="EHDS", law="Regulation (EU) 2025/327", ready=False),
+
+
+def _short_of(procedure: str) -> str:
+    """Short name of another procedure from data_sources/procedures/*.yaml, else its reference."""
+    for f in sorted(config.PROCEDURES_DIR.glob("*.yaml")):
+        d = yaml.safe_load(f.read_text(encoding="utf-8")) or {}
+        if isinstance(d, dict) and d.get("procedure") == procedure and d.get("short"):
+            return d["short"]
+    return procedure
+
+def _term_leg(term: tuple | list) -> str:
+    if term and len(term) >= 1 and str(term[0]).startswith("2019"):
+        return "LEG9"
+    try:
+        y = int(str(term[0])[:4])
+        return f"LEG{9 + (y - 2019) // 5}"
+    except Exception:
+        return "LEG9"
+
+
+LEG = _term_leg(TERM)
+
+
+def _format_day_month_year(d_str: str) -> str:
+    """Format 'YYYY-MM-DD' as '13 June 2024'."""
+    if not d_str:
+        return ""
+    try:
+        dt = datetime.strptime(d_str[:10], "%Y-%m-%d")
+        return f"{dt.day} {dt.strftime('%B %Y')}"
+    except Exception:
+        return d_str
+
+
+def _format_month_year(d_str: str) -> str:
+    """Format 'YYYY-MM' or 'YYYY-MM-DD' as 'June 2023' or 'April 2021'."""
+    if not d_str:
+        return ""
+    try:
+        dt = datetime.strptime(d_str[:7], "%Y-%m")
+        return dt.strftime("%B %Y")
+    except Exception:
+        return d_str
+
+
+_ALL_KNOWN_ACTS = [
+    dict(id="2021/0106(COD)", name="Artificial Intelligence Act", short="AI Act", law="Regulation (EU) 2024/1689"),
+    dict(id="2020/0361(COD)", name="Digital Services Act", short="DSA", law="Regulation (EU) 2022/2065"),
+    dict(id="2020/0374(COD)", name="Digital Markets Act", short="DMA", law="Regulation (EU) 2022/1925"),
+    dict(id="2022/0140(COD)", name="European Health Data Space", short="EHDS", law="Regulation (EU) 2025/327"),
 ]
+
+
+def _build_acts() -> list[dict]:
+    curr_proc = config.PROC["procedure"]
+    is_default = config.PROCEDURE_ID == config.DEFAULT_PROCEDURE
+    proposal = config.PROC.get("texts", {}).get("proposal") or {}
+    final = config.PROC.get("texts", {}).get("final") or {}
+    parl = config.PROC.get("parliament") or {}
+    report = parl.get("report") or {}
+    shared = config.PROC.get("analysis", {}).get("shared_sources") or {}
+    wording = config.PROC.get("wording") or {}
+    consultation = config.PROC.get("consultation") or {}
+    c_a = consultation.get("A") or {}
+    c_b = consultation.get("B") or {}
+
+    prop_date = proposal.get("date") or ""
+    prop_year = prop_date[:4] if prop_date else ("2021" if is_default else "")
+    prop_month_year = _format_month_year(prop_date) if prop_date else ("April 2021" if is_default else "")
+
+    final_date = final.get("date") or ""
+    final_year = final_date[:4] if final_date else ("2024" if is_default else "")
+    final_date_label = _format_day_month_year(final_date) if final_date else ("13 June 2024" if is_default else "")
+
+    report_date = report.get("date") or ""
+    report_date_label = _format_month_year(report_date) if report_date else ("June 2023" if is_default else "")
+    report_year = report_date[:4] if report_date else ("2023" if is_default else "")
+
+    term = parl.get("term") or ["2019-07-02", "2024-07-15"]
+    term_start = str(term[0])[:4] if term and len(term) >= 1 else "2019"
+    term_end = str(term[1])[:4] if term and len(term) >= 2 else "2024"
+    term_years = f"{term_start}–{term_end}"
+
+    null_proc = config.PROC.get("null_procedure") or ""
+    null_short = "DSA" if is_default else _short_of(null_proc)
+    null_short_label = f"the {null_short}"
+
+    consolidated_label = (
+        f" (as adopted + {final.get('consolidated_date')[:4]} consolidation)"
+        if final.get("consolidated_date")
+        else (" (as adopted + 2026 consolidation)" if is_default else " (as adopted)")
+    )
+
+    m_a = re.search(r"\b(20\d\d)\b", c_a.get("label", "")) if isinstance(c_a, dict) else None
+    m_b = re.search(r"\b(20\d\d)\b", c_b.get("label", "")) if isinstance(c_b, dict) else None
+    t_a_year = m_a.group(1) if m_a else "2020"
+    t_b_year = m_b.group(1) if m_b else "2021"
+
+    amendment_year = "2022" if is_default else (t_b_year or "2021")
+
+    moments_lead = (
+        f"<p class=\"lead\">Two moments to influence a law: <b>before the bill</b>, when the Commission drafts it "
+        f"({t_a_year} inception consultation → {prop_year} proposal), and <b>on the bill</b>, when Parliament amends it "
+        f"({t_b_year} comments → {amendment_year} committee amendments → {report_year} report → {final_year} law).</p>"
+    )
+
+    curr = dict(
+        id=curr_proc,
+        name=config.PROC["title"],
+        short=config.PROC["short"],
+        law=config.PROC["law"],
+        ready=True,
+        procedure=curr_proc,
+        title=config.PROC.get("title"),
+        proposal_ref=proposal.get("ref"),
+        proposal_date=prop_date,
+        proposal_year=prop_year,
+        proposal_month_year=prop_month_year,
+        final_date=final_date,
+        final_year=final_year,
+        final_date_label=final_date_label,
+        unit_prefix=final.get("unit_prefix"),
+        consolidated=final.get("consolidated"),
+        consolidated_date=final.get("consolidated_date"),
+        consolidated_label=consolidated_label,
+        report_id=report.get("id"),
+        report_date=report_date,
+        report_date_label=report_date_label,
+        report_year=report_year,
+        rapporteurs=parl.get("rapporteurs") or [],
+        term=term,
+        term_years=term_years,
+        term_start_year=term_start,
+        null_procedure=null_proc,
+        null_short=null_short,
+        null_short_label=null_short_label,
+        track_a_label=c_a.get("label") or ("2020 inception impact assessment" if is_default else "Track A"),
+        track_b_label=c_b.get("label") or ("2021 feedback on the proposal" if is_default else "Track B"),
+        track_a_short="2020 inception comment" if is_default else (c_a.get("label") or "Track A comment"),
+        track_b_short="2021 proposal comment" if is_default else (c_b.get("label") or "Track B comment"),
+        track_a_comment_title="2020 inception comment" if is_default else f"{t_a_year} inception comment",
+        track_b_comment_title="2021 comment on the proposal" if is_default else f"{t_b_year} comment on the proposal",
+        track_a_year=t_a_year,
+        track_b_year=t_b_year,
+        amendment_year=amendment_year,
+        consultation_sub=f"{t_a_year} inception + {t_b_year} proposal" if {"A", "B"} <= set(config.PUB_IDS) else "consultation comments",
+        consultation_sources=(
+            "2020 inception impact assessment, 2021 proposal"
+            if is_default
+            else (
+                f"{c_a.get('label') or 'Track A'}, {c_b.get('label') or 'Track B'}"
+                if c_a and c_b
+                else (c_a.get("label") or c_b.get("label") or "consultation")
+            )
+        ),
+        featured_article=(config.PROC.get("analysis") or {}).get("featured_article"),
+        shared_sources=shared.get("demo") or ("the HLEG guidelines, the OECD definition, the White Paper" if is_default else ""),
+        topic=wording.get("topic") or ("AI" if is_default else config.PROC.get("short", "")),
+        moments_lead=moments_lead,
+        meeting_caveat=(
+            "Meeting records cover 2020 and June–October 2024 only; nothing covers the 2022–2023 amendment period."
+            if is_default
+            else "Meeting records cover 2020 and June–October 2024 only; data for other periods is not recorded."
+        ),
+        search_hint="try “Art 5”, “Twilio”, “Benifei”, “Greens”" if is_default else "try “Article”, “Company”, “MEP”, “Group”",
+        filter_placeholder="Filter: “Article 5”, “biometric”, “sandbox”…" if is_default else "Filter by keyword…",
+        register_year="2026",  # LobbyFacts / Integrity Watch snapshot, shared by all procedures
+        judge_cap=config.LLM_MAX_PAIRS_PER_TRACK,  # strongest Track B echoes sent to the LLM judge
+        is_default=is_default,
+    )
+    others = [dict(**a, ready=False) for a in _ALL_KNOWN_ACTS if a["id"] != curr_proc]
+    return [curr] + others
+
+
+ACTS = _build_acts()
 
 
 def _clean(x):
@@ -69,7 +243,7 @@ def mep_profiles(ids: set[int]) -> dict:
         cons = [c for c in r.get("Constituencies") or [] if c and in_term(c)]
         groups = [g for g in r.get("Groups") or [] if g and in_term(g)]
         comms = [c for c in r.get("Committees") or [] if c and in_term(c)]
-        fin = [f for f in r.get("Financial Declarations") or [] if "LEG9" in (f.get("url") or "")]
+        fin = [f for f in r.get("Financial Declarations") or [] if LEG in (f.get("url") or "")]
         occ = []
         if fin:
             f = fin[-1]
