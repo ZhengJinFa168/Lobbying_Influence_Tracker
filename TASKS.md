@@ -20,6 +20,7 @@ Status: `Todo` · `In progress` · `In review` · `Blocked` · `Done`
 | DSA W5: matching and threshold (null procedure from config) | `pipeline/s05_features.py`, `pipeline/s07_match.py`, `pipeline/s08_calibrate.py` | Gemini 3.8 Flash High (coder), Claude (review, merge) | `feat/dsa-w5-matching` | Done (merged) | AI Act regression passed against a base-branch run on a throwaway Neo4j |
 | DSA W6: demo and dashboard text from config | `pipeline/s11_export_dashboard.py`, `pipeline/s11b_demo.py`, `pipeline/*_template.html`, `pipeline/serve.py` | Gemini 3.8 Flash High (coder), Claude (review, merge) | `feat/dsa-w6-demo` | Done (merged) | AI Act regression passed against a base-branch run on a throwaway Neo4j |
 | Echo rule O2: T2 = implements, or partial only when verbatim; old rule kept as a sensitivity output; README numbers updated | `pipeline/s08_calibrate.py`, `pipeline/s09_judge_and_stance.py`, `pipeline/s10_analyse.py`, `neo4j/queries/02b_*.cypher`, templates, docs, `README.md` | Luigi Zheng (Claude) | `feat/dsa-step0` | Done | owner-approved 2026-10-23; changes published AI Act findings; no new LLM calls |
+| Clear the boundary debt: move shared stage helpers into shared modules so `tach check` passes; bump CI actions | `pipeline/s05..s12`, `serve.py`, new shared modules, `tach.toml`, `.github/workflows/boundaries.yml` | Luigi Zheng (Claude) | `fix/boundary-debt` | Done | owner-approved; AI Act output must stay identical |
 | | | | | | |
 
 ## Module owners
@@ -40,19 +41,19 @@ Default point of contact per area. Anyone may work on a module, but tell its own
 
 ## Boundary debt
 
-Cross-stage imports that break the rule "a stage's only public name is `main()`" (`tach check` fails until they are gone).
+Cross-stage imports that break the rule "a stage's only public name is `main()`" (all fixed: `tach check` passes).
 Fix by moving the shared code into a shared module (`textutil`, `units`, a new `pipeline/<name>.py` utility added to `tach.toml` with approval)
 or by reading the data from Neo4j / `config.py` paths. Claim a row before starting.
 
 | Importer | Imports | From | Suggested home | Owner | Status |
 |---|---|---|---|---|---|
-| `pipeline/s06b_meetings.py:26` | `_acronym`, `mnorm` | `s06_orgs` | org-name helpers into `textutil` (or new `orgnames.py`) | | Todo |
-| `pipeline/s07_match.py:33` | `N`, `ngram_tokens`, `ngrams`, `stoplist`, `tokens` | `s05_features` | new shared `ngrams.py` | | Todo |
-| `pipeline/s08_calibrate.py:30-31` | `N`, `combine`, `load`, `masked`, `ngrams`, `pair_features`, `tri`; `stoplist` | `s07_match`, `s05_features` | new shared `matching.py` / `ngrams.py` | | Todo |
-| `pipeline/s10_analyse.py:83` | `ISSUES` | `s09_judge_and_stance` | constant into `config.py` | | Todo |
+| `pipeline/s06b_meetings.py:26` | `_acronym`, `mnorm` | `s06_orgs` | org-name helpers into `textutil` (or new `orgnames.py`) | | Done (moved into pipeline/textmatch.py, orgnames.py, judging.py) |
+| `pipeline/s07_match.py:33` | `N`, `ngram_tokens`, `ngrams`, `stoplist`, `tokens` | `s05_features` | new shared `ngrams.py` | | Done (moved into pipeline/textmatch.py, orgnames.py, judging.py) |
+| `pipeline/s08_calibrate.py:30-31` | `N`, `combine`, `load`, `masked`, `ngrams`, `pair_features`, `tri`; `stoplist` | `s07_match`, `s05_features` | new shared `matching.py` / `ngrams.py` | | Done (moved into pipeline/textmatch.py, orgnames.py, judging.py) |
+| `pipeline/s10_analyse.py:83` | `ISSUES` | `s09_judge_and_stance` | constant into `config.py` | | Done (moved into pipeline/textmatch.py, orgnames.py, judging.py) |
 | `pipeline/s11b_demo.py:20` | `RAPPORTEURS` | `s10b_reach_model` | constant into `config.py` | | Done (W6: rapporteurs read from config) |
-| `pipeline/s12_eval.py:23` | `judge`, `proposal_choices`, `_parts`, `_codebook`, `_stance_schema`, `NA`, `STANCE_PROMPT`, `STANCE_SYSTEM` | `s09_judge_and_stance` | new shared `judge.py` (prompts, schema, judge) | | Todo |
-| `pipeline/serve.py:22` | whole module (`judge_pairs`, `judge_prompt`, `JUDGE_SCHEMA`, `JUDGE_SYSTEM`) | `s09_judge_and_stance` | same `judge.py` | | Todo |
+| `pipeline/s12_eval.py:23` | `judge`, `proposal_choices`, `_parts`, `_codebook`, `_stance_schema`, `NA`, `STANCE_PROMPT`, `STANCE_SYSTEM` | `s09_judge_and_stance` | new shared `judge.py` (prompts, schema, judge) | | Done (moved into pipeline/textmatch.py, orgnames.py, judging.py) |
+| `pipeline/serve.py:22` | whole module (`judge_pairs`, `judge_prompt`, `JUDGE_SCHEMA`, `JUDGE_SYSTEM`) | `s09_judge_and_stance` | same `judge.py` | | Done (moved into pipeline/textmatch.py, orgnames.py, judging.py) |
 
 ## DSA follow-ups
 

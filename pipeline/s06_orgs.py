@@ -25,7 +25,7 @@ import pandas as pd
 from rapidfuzz import fuzz, process
 
 from . import config, graph, sources
-from .textutil import ascii_fold, normalise_name
+from .orgnames import acronyms, mnorm
 
 PROCEDURE_AWARE = True  # no procedure-specific inputs: organisations, registers and graph queries are generic
 
@@ -68,33 +68,6 @@ def parse_costs(s) -> tuple[float | None, bool]:
     return v, False
 
 
-def _acronym(name: str, initials: bool = True) -> set[str]:
-    """Acronyms a name carries: bracketed upper-case tokens, an all-caps leading token ('AFNUM - ...'),
-    and (register side only) the initials of a 3+ word name."""
-    out = set()
-    for b in re.findall(r"\(([^)]+)\)", name or ""):
-        for tok in re.findall(r"\b[A-Z][A-Z0-9&\-]{1,9}\b", b):
-            out.add(tok.replace("-", "").replace("&", ""))
-    # Have Your Say side: only an acronym that stands alone or before a separator; register side: any
-    # all-caps leading token ("CFE-CGC Confédération ...")
-    lead = r"\s*([A-Z][A-Z0-9&\-]{1,9})\b" if initials else r"\s*([A-Z][A-Z0-9&\-]{1,9})(\s+[-\u2013:|(]|\s*$)"
-    first = re.match(lead, name or "")
-    if first:
-        out.add(first.group(1).replace("-", "").replace("&", ""))
-    if initials:
-        words = [w for w in re.findall(r"[A-Za-z]+", ascii_fold(re.sub(r"\([^)]*\)", " ", name or "")))
-                 if w.lower() not in {"of", "and", "for", "the", "de", "des", "du", "la", "le", "et", "fur", "und", "in"}]
-        if len(words) >= 3:
-            out.add("".join(w[0] for w in words).upper())
-    return {a for a in out if len(a) >= 3}
-
-
-def mnorm(name: str) -> str:
-    """Matching normalisation on top of normalise_name: drops a leading 'the' and Dutch 'stichting'."""
-    s = normalise_name(name)
-    return re.sub(r"^(the|stichting)\s+", "", s)
-
-
 def register() -> pd.DataFrame:
     lf = sources.load("lobbyfacts").rename(columns={
         "Identification code": "tr_id", "Name": "lf_name", "Members FTE": "lf_fte", "Lobbying cost": "lf_cost",
@@ -122,7 +95,7 @@ def register() -> pd.DataFrame:
         reg[c] = reg[c].map(_num)
     reg["reg_date"] = pd.to_datetime(reg.reg_date, format="%d/%m/%Y", errors="coerce").dt.date.astype(str).replace("NaT", None)
     reg["norm"] = reg.name.fillna("").map(mnorm)
-    reg["acronyms"] = reg.name.fillna("").map(_acronym)
+    reg["acronyms"] = reg.name.fillna("").map(acronyms)
     return reg.reset_index(drop=True)
 
 
@@ -150,7 +123,7 @@ def match_name(org: dict, reg: pd.DataFrame, by_norm: dict, hys_tr_by_norm: dict
         return None, "none", 0.0, None
     pool = [i for i in range(len(reg)) if plausible(i)]
     # 3b an acronym the Have Your Say name states explicitly, same country and category
-    acr = _acronym(org["name"], initials=False)
+    acr = acronyms(org["name"], initials=False)
     if acr:
         cand = [i for i in pool if acr & reg.acronyms.iat[i]]
         if len(cand) == 1:
@@ -195,7 +168,7 @@ def build() -> tuple[pd.DataFrame, pd.DataFrame]:
     # "European Automobile ... (ACEA)"): same explicit acronym, country and user type -> one node
     seen: dict[tuple, str] = {}
     for i in out.index[out.tr_id.isna()]:
-        for a in sorted(_acronym(out.at[i, "name"], initials=False)):
+        for a in sorted(acronyms(out.at[i, "name"], initials=False)):
             k = (a, out.at[i, "country"], out.at[i, "user_type"])
             if k in seen and seen[k] != out.at[i, "org_id"]:
                 out.at[i, "org_id"] = seen[k]

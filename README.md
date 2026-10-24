@@ -175,7 +175,7 @@ fixes changed it on purpose (see [What we found](#what-we-found)). The Digital S
 | Which law | Any procedure with a config file `data_sources/procedures/<id>.yaml` (`ai_act.yaml`, `dsa.yaml`); the stages read every law-specific value (IDs, report, rapporteurs, dates, prompt wording, page text) from it; the demo's list of other acts in `pipeline/s11b_demo.py` is the exception |
 | Running | `python -m pipeline.run` for the AI Act; `--procedure <id>` (or `PROCEDURE_ID=<id>`) for another law |
 | Data and database | Each law has its own `data/<id>/` folder and its own Neo4j, set in `.env.<id>`; a run that would use the AI Act database for another law is refused. The LLM cache is shared (keyed by model, prompt, schema and seed) |
-| Safety | `run.py` only runs a stage for another law if it sets `PROCEDURE_AWARE = True` (every stage does now; S00, the sanity check, always runs); config files, contracts, linter config, tests and CI are protected and change only with the owner's approval; `tach check` (pre-commit hook and the `boundaries` GitHub Actions check) enforces module boundaries; it currently fails on known boundary debt, see [Limitations](#limitations) |
+| Safety | `run.py` only runs a stage for another law if it sets `PROCEDURE_AWARE = True` (every stage does now; S00, the sanity check, always runs); config files, contracts, linter config, tests and CI are protected and change only with the owner's approval; `tach check` (pre-commit hook and the `boundaries` GitHub Actions check) enforces module boundaries |
 | Scraping | `WebScraping/*.py --procedure <id>`; SSL via certifi; PDF and Word attachments read with pypdf, pdfplumber and python-docx (in `requirements.txt`) |
 | Echo rule | T2 = *implements*, or *partial* with a verbatim run; the previous rule (verbatim, or *implements* / *partial*) is kept as a sensitivity output (query `02b`, `echoed_amendments_all.csv`) |
 | Evaluation | S12's null check judges comments against an unrelated act's amendments: 0% *implements* (AI Act) and 1% (DSA), about one third *partial* |
@@ -227,18 +227,11 @@ Plan for one to two hours, mostly step 1 and any parser fixes the new EUR-Lex HT
 - **Track A needs a codebook per law.** The DSA has none in the repo yet (a draft is waiting for review), so its 2020-positions analysis is skipped.
 - **Reproducibility.** S10's random baselines use a fixed seed, but the pool of MEPs they draw from is read from Neo4j without a fixed order,
   so the baselines can shift slightly between runs. S12's cross-model check makes two LLM calls on every run whose answers do not get cached.
-- **The `boundaries` check on GitHub fails on purpose.** It runs `tach check` (`tach.toml`: a stage's only public name is `main()`, and stages
-  may import only the shared modules `config`, `graph`, `llm`, `embed`, `sources`, `textutil`, `units`). Seven files still use another stage's
-  internal helpers, written before the rule existed: `s07_match` and `s08_calibrate` use S05/S07's n-gram and scoring helpers, `s12_eval`,
-  `s10_analyse` and `serve` use S09's prompts, codebook and judge, and `s06b_meetings` uses S06's name normaliser. Tach reports each import
-  twice (dependency and interface), 49 errors in all. The pipeline runs fine; the red check is this known debt (`TASKS.md`, "Boundary debt"),
-  not a broken build. It turns green once those helpers move into shared modules, which needs a reviewed change to `tach.toml` (protected).
-  The pre-commit hook fails for the same reason when `pipeline/*.py` changes, so commits there use `--no-verify` until then.
 
 ### Next steps
 
 - More laws: the Digital Markets Act and the European Health Data Space, and a resolver that fills `<id>.yaml` from the procedure number.
-- Quality: approve a DSA codebook, fix the order of S10's MEP pool, draw S12's null sample at random, clear the boundary debt.
+- Quality: approve a DSA codebook, fix the order of S10's MEP pool, draw S12's null sample at random.
 - Online version: several laws in one Neo4j, a small API over it, demo pages that load each law's data on request, and a queue for new laws.
 
 ## Repository layout

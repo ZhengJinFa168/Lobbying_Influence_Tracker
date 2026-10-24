@@ -23,7 +23,7 @@ import pandas as pd
 from rapidfuzz import fuzz, process
 
 from . import config, graph, sources
-from .s06_orgs import _acronym, mnorm
+from .orgnames import acronyms, mnorm
 from .textutil import TR_RE
 
 PROCEDURE_AWARE = True  # title filters loaded from config.PROC["meetings"]
@@ -60,7 +60,7 @@ class OrgIndex:
                     if " " not in k and len(k) <= 6 and "(" in n:
                         # "ACEA (European Automobile ...)" normalises to "acea", which also names Acea S.p.A.
                         self.unsafe.setdefault(k, set()).add(_alnum(n))
-                    for a in _acronym(n, initials=False) | {a for a in _acronym(n) if a.isalpha() and len(a) >= 4
+                    for a in acronyms(n, initials=False) | {a for a in acronyms(n) if a.isalpha() and len(a) >= 4
                                                             and a == n.split()[0].upper().strip("()-")}:
                         self.acr.setdefault(a, set()).add(r.org_id)
         self.keys = [k for k in self.names if k]
@@ -72,7 +72,7 @@ class OrgIndex:
         if n in self.names and (n not in self.unsafe or _alnum(s) in self.unsafe[n]):
             return self.names[n], "exact_name", 0.9
         # explicit acronym, unique; when the string also spells out a name, that name must fit the organisation
-        acr = _acronym(s, initials=False)
+        acr = acronyms(s, initials=False)
         hits = {o for a in acr for o in self.acr.get(a, set())}
         if len(hits) == 1:
             o = next(iter(hits))

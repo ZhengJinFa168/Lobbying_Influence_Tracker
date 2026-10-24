@@ -29,8 +29,7 @@ import scipy.sparse as sp
 
 from . import config, graph, sources
 from .embed import embed
-from .s07_match import N, combine, load, masked, ngrams, pair_features, tri
-from .s05_features import stoplist
+from .textmatch import N, combine, load, masked, ngrams, pair_features, stoplist, tri
 
 # Procedure-aware: null procedure and paths loaded from config.PROC / config.NULL_PROCEDURE
 PROCEDURE_AWARE = True

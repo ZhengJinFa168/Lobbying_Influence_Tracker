@@ -23,14 +23,14 @@ from __future__ import annotations
 import json
 import logging
 import pickle
-from difflib import SequenceMatcher
 
 import numpy as np
 import pandas as pd
 import scipy.sparse as sp
 
 from . import config, graph
-from .s05_features import N, ngram_tokens, ngrams, stoplist, tokens
+from .textmatch import (COMMON_N, N, NGRAM_SMOOTH, combine, load, longest_run, masked, ngrams, pair_features, stoplist,
+                        tokens, tri)
 from .units import top
 
 # Procedure-aware: reads consultation tracks and paths from config
@@ -41,25 +41,11 @@ SOURCE = "s07_match"
 F = config.FEATURES
 RNG = np.random.default_rng(7)
 CITED_PER_CHUNK = 20
-NGRAM_SMOOTH = 5         # added to the 3-gram denominator
 NGRAM_STD_FLOOR = 0.05   # random pairs share almost no 3-grams; without a floor z(s_ngram) explodes
 DUP_RUN, DUP_COS, DUP_TFIDF = 12, 0.97, 0.5
 
 
-def load(track: str, kind: str):
-    df = pd.read_parquet(F / f"{track}_{kind}.parquet")
-    return df, np.load(F / f"{track}_{kind}_emb.npy"), sp.load_npz(F / f"{track}_{kind}_tfidf.npz")
-
-
-class _Gap:  # a masked (stoplisted) position: never equal to anything, so runs cannot cross it
-    def __eq__(self, other):
-        return False
-
-    def __hash__(self):
-        return id(self)
-
-
-COMMON_N, COMMON_ORGS = 12, 8
+COMMON_ORGS = 8
 
 
 def common_quotes() -> set[tuple]:
@@ -78,35 +64,6 @@ def common_quotes() -> set[tuple]:
     return {g for g, o in seen.items() if len(o) >= COMMON_ORGS}
 
 
-def masked(text, stop, common: set[tuple] = frozenset()) -> list:
-    toks = ngram_tokens(text, stop)
-    if common:
-        raw = tokens(text)
-        for i, g in enumerate(ngrams(raw, COMMON_N)):
-            if g in common:
-                for k in range(i, i + COMMON_N):
-                    toks[k] = None
-    return [t if t is not None else _Gap() for t in toks]
-
-
-def longest_run(a: list, b: list) -> tuple[int, str]:
-    if not a or not b:
-        return 0, ""
-    m = SequenceMatcher(None, a, b, autojunk=False).find_longest_match(0, len(a), 0, len(b))
-    return m.size, " ".join(str(x) for x in a[m.a : m.a + m.size])
-
-
-def tri(tokens: list) -> set:
-    return {g for g in ngrams([t if isinstance(t, str) else None for t in tokens], 3) if None not in g}
-
-
-def pair_features(chunk_tok: list, target_tok: list, target_tri: set) -> dict:
-    run, run_text = longest_run(chunk_tok, target_tok)
-    # smoothed share: a target with 2 free 3-grams that both occur is not "100% shared"
-    s_ngram = len(target_tri & tri(chunk_tok)) / (len(target_tri) + NGRAM_SMOOTH)
-    return dict(s_ngram=s_ngram, longest_run=run, run_text=run_text if run >= 5 else None)
-
-
 def random_stats(Ce, Ge, Cx, Gx, c_tok, g_tok, g_tri, n: int = 20000) -> dict:
     i = RNG.integers(0, len(Ce), n)
     j = RNG.integers(0, len(Ge), n)
@@ -117,13 +74,6 @@ def random_stats(Ce, Ge, Cx, Gx, c_tok, g_tok, g_tri, n: int = 20000) -> dict:
     return dict(embed_mean=float(e.mean()), embed_std=max(float(e.std()), floor),
                 tfidf_mean=float(t.mean()), tfidf_std=max(float(t.std()), floor),
                 ngram_mean=float(g.mean()), ngram_std=max(float(g.std()), NGRAM_STD_FLOOR))
-
-
-def combine(df: pd.DataFrame, st: dict) -> pd.Series:
-    w = config.SCORE_WEIGHTS
-    return (w["s_embed"] * (df.s_embed - st["embed_mean"]) / st["embed_std"]
-            + w["s_tfidf"] * (df.s_tfidf - st["tfidf_mean"]) / st["tfidf_std"]
-            + w["s_ngram"] * (df.s_ngram - st["ngram_mean"]) / st["ngram_std"])
 
 
 def match_track(track: str, common: set[tuple]) -> tuple[pd.DataFrame, dict]:

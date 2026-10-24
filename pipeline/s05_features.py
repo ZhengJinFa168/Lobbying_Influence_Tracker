@@ -22,7 +22,6 @@ from __future__ import annotations
 
 import logging
 import pickle
-import re
 
 import numpy as np
 import pandas as pd
@@ -31,6 +30,7 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 
 from . import config, graph
 from .embed import embed
+from .textmatch import ngram_tokens, ngrams, tokens
 from .textutil import ascii_fold
 
 # Procedure-aware: reads consultation tracks and paths from config
@@ -39,17 +39,7 @@ PROCEDURE_AWARE = True
 log = logging.getLogger("s05")
 SOURCE = "s05_features"
 F = config.FEATURES
-N = config.STOPLIST_N
 MIN_TARGET_WORDS = 5
-
-
-def tokens(s) -> list[str]:
-    s = ascii_fold(s if isinstance(s, str) else "").lower()
-    return re.findall(r"[a-z0-9]+", s)
-
-
-def ngrams(toks: list[str], n: int = N) -> list[tuple]:
-    return [tuple(toks[i : i + n]) for i in range(len(toks) - n + 1)]
 
 
 def build_stoplist() -> set[tuple]:
@@ -58,23 +48,6 @@ def build_stoplist() -> set[tuple]:
     for t in prov.text.fillna("").tolist() + prov.title.fillna("").tolist():
         stop.update(ngrams(tokens(t)))
     return stop
-
-
-def stoplist(track: str) -> set[tuple]:
-    if track == "A":
-        return set()
-    return pickle.load(open(F / "stoplist_6grams.pkl", "rb"))
-
-
-def ngram_tokens(text, stop: set[tuple]) -> list[str | None]:
-    """Tokens with every position covered by a stoplisted 6-gram replaced by None."""
-    toks = tokens(text)
-    masked = list(toks)
-    for i, g in enumerate(ngrams(toks)):
-        if g in stop:
-            for k in range(i, i + N):
-                masked[k] = None
-    return masked
 
 
 def stoplisted_share(text, stop) -> float:

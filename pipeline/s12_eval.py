@@ -22,7 +22,7 @@ import pandas as pd
 from sklearn.metrics import cohen_kappa_score
 
 from . import config, graph, llm
-from .s09_judge_and_stance import judge, proposal_choices, _parts, _codebook, _stance_schema, NA, STANCE_PROMPT, STANCE_SYSTEM
+from .judging import judge, proposal_choices
 
 PROCEDURE_AWARE = True  # null procedure and outputs derived from config
 log = logging.getLogger("s12")

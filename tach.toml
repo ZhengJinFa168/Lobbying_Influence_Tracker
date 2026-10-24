@@ -2,7 +2,7 @@
 # Protected file: changes need the repo owner's approval (see CLAUDE.md and .github/CODEOWNERS).
 #
 # Rules:
-# - Shared core (config, graph, llm, embed, sources, textutil, units) are utility modules:
+# - Shared core (config, graph, llm, embed, sources, textutil, units, textmatch, orgnames, judging) are utility modules:
 #   any module may import their public (non-underscore) names, and they may not import stages.
 # - Stages (sNN_*), run and serve depend on the shared core only. A stage's only public name is main().
 #   Code another stage needs belongs in a shared module, not in a cross-stage import.
@@ -55,6 +55,21 @@ utility = true
 [[modules]]
 path = "pipeline.units"
 depends_on = []
+utility = true
+
+[[modules]]
+path = "pipeline.textmatch"
+depends_on = ["pipeline.config", "pipeline.textutil"]
+utility = true
+
+[[modules]]
+path = "pipeline.orgnames"
+depends_on = ["pipeline.textutil"]
+utility = true
+
+[[modules]]
+path = "pipeline.judging"
+depends_on = ["pipeline.config", "pipeline.llm"]
 utility = true
 
 # Entry points (run imports stages dynamically through importlib, which Tach does not see)
@@ -145,4 +160,5 @@ expose = ["[^_].*"]
 from = [
     "pipeline\\.config", "pipeline\\.graph", "pipeline\\.llm", "pipeline\\.embed",
     "pipeline\\.sources", "pipeline\\.textutil", "pipeline\\.units",
+    "pipeline\\.textmatch", "pipeline\\.orgnames", "pipeline\\.judging",
 ]
