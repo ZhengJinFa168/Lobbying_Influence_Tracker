@@ -52,7 +52,8 @@ Humans own interfaces and contracts; agents own module internals.
   - Never make `tach check` pass by adding `depends_on` or `expose` entries (or by running `tach sync`); that is a change to `tach.toml` and needs the user's approval.
   - A new file under `pipeline/` is unusable until it is declared in `tach.toml`: ask the user to add it.
   - Tach checks `from X import name`, not attribute access on a module (`graph._x`). Do not use underscore names from another module either way.
-- Known violations from before the boundaries existed are listed in `TASKS.md` → *Boundary debt*. `tach check` fails until they are fixed.
+- Shared stage helpers live in `pipeline/textmatch.py`, `orgnames.py` and `judging.py`; `tach check` passes, so keep it that way
+  (the pre-commit hook and the `boundaries` GitHub check run it).
 
 ## Orchestration: Claude leads, Gemini reads and reviews
 
