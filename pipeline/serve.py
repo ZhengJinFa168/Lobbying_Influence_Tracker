@@ -19,7 +19,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import pandas as pd
 
 from . import config, graph, llm
-from . import s09_judge_and_stance as s09
+from . import judging
 
 PORT = 8765
 _pairs: dict[str, pd.DataFrame] = {}
@@ -49,7 +49,7 @@ WRITE_RE = re.compile(r"\b(CREATE|MERGE|DELETE|DETACH|SET|REMOVE|DROP|LOAD\s+CSV
 
 def pair(track: str, chunk_id: str, target_id: str):
     if track not in _pairs:
-        _pairs[track] = s09.judge_pairs(track)  # same rows and texts the batch judge used
+        _pairs[track] = judging.judge_pairs(track)  # same rows and texts the batch judge used
     p = _pairs[track]
     hit = p[(p.chunk_id == chunk_id) & (p.target_id == target_id)]
     return next(hit.itertuples()) if len(hit) else None
@@ -100,8 +100,8 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("Content-Type", "text/plain; charset=utf-8")
         self.end_headers()
         try:
-            for piece in llm.stream(s09.judge_prompt(req.get("track", "B"), row), s09.JUDGE_SCHEMA,
-                                    system=s09.JUDGE_SYSTEM, tag="live_judge"):
+            for piece in llm.stream(judging.judge_prompt(req.get("track", "B"), row), judging.JUDGE_SCHEMA,
+                                    system=judging.JUDGE_SYSTEM, tag="live_judge"):
                 self.wfile.write(piece.encode())
                 self.wfile.flush()
         except Exception as e:  # noqa: BLE001 - the page falls back to the cached verdict
