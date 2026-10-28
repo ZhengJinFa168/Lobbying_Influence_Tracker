@@ -1,5 +1,7 @@
 # Lobby Echo: tracing lobbying influence on the EU AI Act
 
+**2nd place out of 10 teams at the Madrid Open Vol. 1 Hackathon (October 2026).**
+
 **Question.** Do stakeholder comments on the AI Act (procedure `2021/0106(COD)`) show up in the legal text, and through whom?
 
 This repository is a data pipeline, a Neo4j graph and an interactive demo. It follows public comments from the European Commission's
